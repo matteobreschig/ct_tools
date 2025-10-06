@@ -13,6 +13,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\RawJs;
+use Illuminate\Support\Facades\Http;
 
 class TrackedBlueprintForm
 {
@@ -45,6 +46,12 @@ class TrackedBlueprintForm
                         $set('price', $data['offers']['price']);
                         //Chiamata API per gli altri dati
 
+                        $response = Http::withToken(config('app.ct_api_token'))->get('https://api.cardtrader.com/api/v2/marketplace/products?blueprint_id=' . $data['sku'] . '&language=' . config('app.locale'));
+                        if($response->successful()) {
+                            $responseData = $response->json();
+                            $set('blueprint_expansion_code', $responseData[$data['sku']][0]['expansion']['code']);
+                            $set('blueprint_collector_number', $responseData[$data['sku']][0]['properties_hash']['collector_number']);
+                        }
                     }
                     catch(Exception $e) {
                         $set('blueprint_url', null);
