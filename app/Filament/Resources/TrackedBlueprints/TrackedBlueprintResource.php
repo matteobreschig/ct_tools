@@ -38,7 +38,7 @@ class TrackedBlueprintResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            RelationManagers\TrackedBlueprintNotificationsRelationManager::class,
         ];
     }
 

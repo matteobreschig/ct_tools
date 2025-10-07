@@ -44,8 +44,8 @@ class TrackedBlueprintForm
                         $set('blueprint_id', $data['sku']);
                         $set('blueprint_name', $data['name']);
                         $set('price', $data['offers']['price']);
-                        //Chiamata API per gli altri dati
 
+                        //Chiamata API per gli altri dati
                         $response = Http::withToken(config('app.ct_api_token'))->get('https://api.cardtrader.com/api/v2/marketplace/products?blueprint_id=' . $data['sku'] . '&language=' . config('app.locale'));
                         if($response->successful()) {
                             $responseData = $response->json();
