@@ -50,4 +50,9 @@ class TrackedBlueprintResource extends Resource
             'edit' => EditTrackedBlueprint::route('/{record}/edit'),
         ];
     }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return static::getModel()::query()->where('user_id' , auth()->id());
+    }
 }

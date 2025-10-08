@@ -10,8 +10,12 @@ class TrackedBlueprintNotification extends Model
 {
     protected $fillable = [
         'tracked_blueprint_id',
-        'price',
         'datetime',
+        'price',
+        'quantity',
+        'condition',
+        'language',
+        'ct_zero',
     ];
 
     /**
@@ -24,6 +28,7 @@ class TrackedBlueprintNotification extends Model
         return [
             'price' => MoneyCast::class,
             'datetime' => 'datetime',
+            'ct_zero' => 'boolean',
         ];
     }
 

@@ -22,4 +22,15 @@ enum ConditionType: string implements HasLabel
             self::PO => 'PO',
         };
     }
+
+    public function getApiLabel(): ?string
+    {
+        return match ($this) {
+            self::NM => 'Near Mint',
+            self::SP => 'Slightly Played',
+            self::MP => 'Moderately Played',
+            self::PL => 'Played',
+            self::PO => 'Poor',
+        };
+    }
 }

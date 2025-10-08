@@ -10,6 +10,7 @@ class DispatchUpdates implements ShouldQueue
 {
     use Queueable;
 
+    public bool $registerAllPrices;
     /**
      * Create a new job instance.
      */
@@ -23,8 +24,7 @@ class DispatchUpdates implements ShouldQueue
      */
     public function handle(): void
     {
-        $trackedBlueprints = TrackedBlueprint::all();
-        dd($trackedBlueprints);
+        $trackedBlueprints = TrackedBlueprint::where('active', 1)->get();
         foreach ($trackedBlueprints as $trackedBlueprint) {
             UpdateBlueprintPrice::dispatch($trackedBlueprint, $this->registerAllPrices);
         }
