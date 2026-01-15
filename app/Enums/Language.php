@@ -16,6 +16,7 @@ enum Language: string implements HasLabel
     case RU = 'ru';
     case PL = 'pl';
     case SV = 'sv';
+    case JP = 'jp';
 
     public function getLabel(): ?string
     {
@@ -30,6 +31,7 @@ enum Language: string implements HasLabel
             self::RU => 'RU',
             self::PL => 'PL',
             self::SV => 'SV',
+            self::JP => 'JP',
         };
     }
 }

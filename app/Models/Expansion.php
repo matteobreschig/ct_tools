@@ -1,0 +1,14 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Expansion extends Model
+{
+    protected $fillable = [
+        'ct_id',
+        'code',
+        'name',
+    ];
+}

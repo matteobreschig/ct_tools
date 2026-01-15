@@ -23,6 +23,7 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
+        'ct_api_key',
     ];
 
     /**
@@ -56,5 +57,10 @@ class User extends Authenticatable implements FilamentUser
     public function canAccessPanel(Panel $panel): bool
     {
         return true;
+    }
+
+    public function hasCtApiKey(): bool
+    {
+        return !empty($this->ct_api_key);
     }
 }
