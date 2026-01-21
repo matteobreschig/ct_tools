@@ -2,11 +2,15 @@
 
 namespace App\Filament\Resources\Products\Tables;
 
+use App\Enums\ConditionType;
+use App\Enums\Language;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class ProductsTable
@@ -105,11 +109,47 @@ class ProductsTable
                     ->toggleable(),
             ])
             ->filters([
-                //
+                SelectFilter::make('category')
+                    ->label('Categoria')
+                    ->relationship('category', 'name')
+                    ->searchable()
+                    ->multiple()
+                    ->preload(),
+                SelectFilter::make('expansion')
+                    ->label('Espansione')
+                    ->relationship('expansion', 'name')
+                    ->searchable()
+                    ->multiple()
+                    ->preload(),
+                SelectFilter::make('condition')
+                    ->label('Condizione')
+                    ->options(ConditionType::class)
+                    ->searchable()
+                    ->multiple()
+                    ->preload(),
+                SelectFilter::make('language')
+                    ->label('Lingua')
+                    ->options(Language::class)
+                    ->searchable()
+                    ->multiple()
+                    ->preload(),
+                Filter::make('tournament_legal')
+                    ->label('Legale per i tornei')
+                    ->toggle(),
+                Filter::make('reverse')
+                    ->label('Reverse')
+                    ->toggle(),
+                Filter::make('signed')
+                    ->label('Segnato')
+                    ->toggle(),
+                Filter::make('altered')
+                    ->label('Alterato')
+                    ->toggle(),
+                Filter::make('first_edition')
+                    ->label('Prima edizione')
+                    ->toggle(),
             ])
-            ->recordActions([
-                EditAction::make(),
-            ])
+            ->recordActions([])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
