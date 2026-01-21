@@ -4,14 +4,18 @@ namespace App\Filament\Resources\Products\Tables;
 
 use App\Enums\ConditionType;
 use App\Enums\Language;
+use App\Services\CTApiClient;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
+use Filament\Forms\Components\ToggleButtons;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
 
 class ProductsTable
 {
@@ -152,7 +156,40 @@ class ProductsTable
             ->recordActions([])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    BulkAction::make('set_sale_status')
+                        ->label('Imposta stato vendita')
+                        ->icon(Heroicon::Banknotes)
+                        ->requiresConfirmation()
+                        ->schema([
+                            ToggleButtons::make('sale_status')
+                                ->label('Stato vendita')
+                                ->inline()
+                                ->required()
+                                ->options([
+                                    'set_on_sale' => 'In vendita',
+                                    'set_off_sale' => 'Non in vendita',
+                                ])
+                                ->icons([
+                                    'set_on_sale' => Heroicon::HandThumbUp,
+                                    'set_off_sale' => Heroicon::HandThumbDown,
+                                ])
+                        ])
+                        ->action(function (array $data, Collection $records) {
+                            $ctData = ['products' => []];
+
+                            $records->each(function ($model) use ($data, &$ctData) {
+                                $model->sale = $data['sale_status'] == 'set_on_sale';
+                                $model->save();
+
+                                $ctData['products'][] = [
+                                    'id' => $model->product_id,
+                                    'price' => $data['sale_status'] == 'set_on_sale' ? $model->price : config('app.ct_disable_price'),
+                                ];
+                            });
+
+                            $client = new CTApiClient(Auth::user());
+                            $ctBulkUpdateResponse = $client->post('/products/bulk_update', $ctData)->json();
+                        }),
                 ]),
             ]);
     }

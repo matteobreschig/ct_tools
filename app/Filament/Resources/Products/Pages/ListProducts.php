@@ -10,7 +10,6 @@ use App\Models\Product;
 use App\Services\CTApiClient;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
 class ListProducts extends ListRecords
@@ -55,33 +54,48 @@ class ListProducts extends ListRecords
                     }
 
                     $productsData = $client->get('/products/export', ['category_id' => '73'])->json();
+                    $ctProductIds = collect($productsData)->pluck('id')->all();
+
+                    $categories = Category::pluck('id', 'ct_id');
+                    $expansions = Expansion::pluck('id', 'ct_id');
+
                     foreach($productsData as $productData) {
-                        Product::updateOrCreate(
-                            [
-                                'product_id' => $productData['id']
-                            ],
-                            [
-                                'user_id' => Auth::user()->id,
-                                'name' => $productData['name_en'],
-                                'description' => $productData['description'],
-                                'quantity' => $productData['quantity'],
-                                'price' => $productData['price_cents'] / 100,
-                                'blueprint_id' => $productData['blueprint_id'],
-                                'category_id' => Category::where('ct_id', $productData['category_id'])->first()->id,
-                                'expansion_id' => Expansion::where('ct_id', $productData['expansion']['id'])->first()->id,
-                                'collector_number' => $productData['properties_hash']['collector_number'] ?? 0,
-                                'condition' => isset($productData['properties_hash']['condition']) ? ConditionType::fromApiLabel($productData['properties_hash']['condition']) : ConditionType::NM,
-                                'tournament_legal' => $productData['properties_hash']['tournament_legal'] ?? false,
-                                'reverse' => $productData['properties_hash']['pokemon_reverse'] ?? false,
-                                'language' => $productData['properties_hash']['pokemon_language'] ?? 'it',
-                                'signed' => $productData['properties_hash']['signed'] ?? false,
-                                'rarity' => $productData['properties_hash']['pokemon_rarity'] ?? 'Common',
-                                'altered' => $productData['properties_hash']['altered'] ?? false,
-                                'first_edition' => $productData['properties_hash']['first_edition'] ?? false,
-                                'last_update' => Carbon::now(),
-                            ]
-                        );
+                        $product = Product::firstOrNew([
+                            'product_id' => $productData['id'],
+                            'user_id' => Auth::id(),
+                        ]);
+
+                        $product->fill([
+                            'name' => $productData['name_en'],
+                            'description' => $productData['description'],
+                            'quantity' => $productData['quantity'],
+                            'blueprint_id' => $productData['blueprint_id'],
+                            'category_id' => $categories[$productData['category_id']],
+                            'expansion_id' => $expansions[$productData['expansion']['id']],
+                            'collector_number' => $productData['properties_hash']['collector_number'] ?? 0,
+                            'condition' => isset($productData['properties_hash']['condition'])
+                                ? ConditionType::fromApiLabel($productData['properties_hash']['condition'])
+                                : ConditionType::NM,
+                            'tournament_legal' => $productData['properties_hash']['tournament_legal'] ?? false,
+                            'reverse' => $productData['properties_hash']['pokemon_reverse'] ?? false,
+                            'language' => $productData['properties_hash']['pokemon_language'] ?? 'it',
+                            'signed' => $productData['properties_hash']['signed'] ?? false,
+                            'rarity' => $productData['properties_hash']['pokemon_rarity'] ?? 'Common',
+                            'altered' => $productData['properties_hash']['altered'] ?? false,
+                            'first_edition' => $productData['properties_hash']['first_edition'] ?? false,
+                            'last_update' => now(),
+                        ]);
+
+                        if ($productData['price_cents'] < config('app.ct_disable_price') * 100) {
+                            $product->price = $productData['price_cents'] / 100;
+                        }
+
+                        $product->save();
                     }
+
+                    Product::where('user_id', Auth::id())
+                        ->whereNotIn('product_id', $ctProductIds)
+                        ->delete();
                 })
         ];
     }
