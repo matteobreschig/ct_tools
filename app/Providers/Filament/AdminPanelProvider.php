@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Livewire\MyProfileCtApiKey;
+use App\Livewire\MyProfileGCalendar;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -44,7 +46,8 @@ class AdminPanelProvider extends PanelProvider
                     ->myProfile(
                         userMenuLabel: 'Mio profilo',
                         navigationGroup: 'Settings',
-                    ),
+                    )
+                    ->myProfileComponents([MyProfileCtApiKey::class]),
             ])
             ->widgets([
                 AccountWidget::class,

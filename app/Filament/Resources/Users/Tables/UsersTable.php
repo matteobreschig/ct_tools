@@ -22,6 +22,8 @@ class UsersTable
                 TextColumn::make('email')
                     ->label('Email')
                     ->searchable(),
+                TextColumn::make('role')
+                    ->label('Ruolo'),
                 TextColumn::make('created_at')
                     ->label('Creato il')
                     ->dateTime()

@@ -2,7 +2,10 @@
 
 namespace App\Filament\Resources\Users\Schemas;
 
+use App\Enums\Roles;
+use Couchbase\Role;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -27,6 +30,10 @@ class UserForm
                     ->dehydrateStateUsing(fn ($state) => Hash::make($state))
                     ->dehydrated(fn ($state) => filled($state))
                     ->required(fn (string $context): bool => $context === 'create'),
+                Select::make('role')
+                    ->options(Roles::class)
+                    ->required()
+                    ->label('Ruolo'),
                 Textarea::make('ct_api_key')
                     ->label('CT API Key'),
             ]);
