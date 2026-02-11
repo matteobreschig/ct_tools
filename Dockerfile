@@ -3,26 +3,39 @@
 # =========================
 FROM php:8.4-cli AS build
 
-# Install system deps
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
     libzip-dev \
     libpng-dev \
-    libonig-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libicu-dev \
     libxml2-dev \
-    && docker-php-ext-install pdo_mysql zip bcmath exif \
+    && docker-php-ext-install \
+        pdo_mysql \
+        zip \
+        bcmath \
+        exif \
+        intl \
+        dom \
+        gd \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Composer manually
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
 COPY composer.json composer.lock ./
 
-RUN composer install --no-dev --prefer-dist
+# IMPORTANTE: no scripts durante build
+RUN composer install \
+    --no-dev \
+    --prefer-dist \
+    --no-interaction \
+    --no-progress \
+    --no-scripts
 
 COPY . .
 
@@ -36,8 +49,20 @@ FROM php:8.4-apache
 
 RUN apt-get update && apt-get install -y \
     libzip-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libicu-dev \
+    libxml2-dev \
     unzip \
-    && docker-php-ext-install pdo_mysql zip bcmath exif \
+    && docker-php-ext-install \
+        pdo_mysql \
+        zip \
+        bcmath \
+        exif \
+        intl \
+        dom \
+        gd \
     && a2enmod rewrite \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
