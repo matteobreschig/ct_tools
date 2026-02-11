@@ -13,7 +13,9 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 
@@ -137,21 +139,18 @@ class ProductsTable
                     ->searchable()
                     ->multiple()
                     ->preload(),
-                Filter::make('tournament_legal')
-                    ->label('Legale per i tornei')
-                    ->toggle(),
-                Filter::make('reverse')
-                    ->label('Reverse')
-                    ->toggle(),
-                Filter::make('signed')
-                    ->label('Segnato')
-                    ->toggle(),
-                Filter::make('altered')
-                    ->label('Alterato')
-                    ->toggle(),
-                Filter::make('first_edition')
-                    ->label('Prima edizione')
-                    ->toggle(),
+                TernaryFilter::make('tournament_legal')
+                    ->label('Legale per i tornei'),
+                TernaryFilter::make('reverse')
+                    ->label('Reverse'),
+                TernaryFilter::make('signed')
+                    ->label('Segnato'),
+                TernaryFilter::make('altered')
+                    ->label('Alterato'),
+                TernaryFilter::make('first_edition')
+                    ->label('Prima edizione'),
+                TernaryFilter::make('sale')
+                    ->label('In vendita')
             ])
             ->recordActions([])
             ->toolbarActions([
