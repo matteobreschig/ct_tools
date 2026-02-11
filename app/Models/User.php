@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\Roles;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,6 +25,7 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'ct_api_key',
+        'role',
     ];
 
     /**
@@ -46,6 +48,7 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => Roles::class,
         ];
     }
 
@@ -62,5 +65,15 @@ class User extends Authenticatable implements FilamentUser
     public function hasCtApiKey(): bool
     {
         return !empty($this->ct_api_key);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === Roles::ADMIN;
+    }
+
+    public function isUser(): bool
+    {
+        return $this->role === Roles::USER;
     }
 }

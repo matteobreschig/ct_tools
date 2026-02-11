@@ -13,12 +13,13 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Auth;
 
 class TrackedBlueprintResource extends Resource
 {
     protected static ?string $model = TrackedBlueprint::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowTrendingUp;
 
     protected static ?string $recordTitleAttribute = 'TrackedBlueprint';
 
@@ -54,5 +55,10 @@ class TrackedBlueprintResource extends Resource
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
         return static::getModel()::query()->where('user_id' , auth()->id());
+    }
+
+    public static function canAccess(): bool
+    {
+        return Auth::user()->isAdmin();
     }
 }

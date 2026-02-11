@@ -4,12 +4,14 @@ namespace App\Filament\Resources\Products\Tables;
 
 use App\Enums\ConditionType;
 use App\Enums\Language;
+use App\Enums\RegulationMark;
 use App\Services\CTApiClient;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -18,13 +20,34 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 
 class ProductsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->recordUrl(null)
             ->columns([
+                ImageColumn::make('image_url')
+                    ->label('')
+                    ->tooltip(function($state) {
+                        return new HtmlString("
+                            <div style='padding:8px'>
+                                <img
+                                    src='{$state}/high.webp'
+                                    style='max-width:300px; height:auto; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2);'
+                                    loading='lazy'
+                                >
+                            </div>
+                        ");
+                    })
+                    ->extraImgAttributes(function($state) {
+                        return [
+                            'src' => $state . '/low.webp',
+                            'loading' => 'lazy',
+                        ];
+                    }),
                 IconColumn::make('sale')
                     ->label('In vendita')
                     ->sortable()
@@ -51,11 +74,11 @@ class ProductsTable
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
-                TextColumn::make('category.name')
+/*                TextColumn::make('category.name')
                     ->label('Categoria')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable(),*/
                 TextColumn::make('expansion.name')
                     ->label('Espansione')
                     ->searchable()
@@ -72,8 +95,18 @@ class ProductsTable
                     ->searchable()
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('regulation_mark')
+                    ->label('Lettera')
+                    ->badge()
+                    ->sortable()
+                    ->toggleable(),
                 IconColumn::make('tournament_legal')
-                    ->label('Legale per i tornei')
+                    ->label('Legale Standard')
+                    ->boolean()
+                    ->sortable()
+                    ->toggleable(),
+                IconColumn::make('tournament_extended_legal')
+                    ->label('Legale Esteso')
                     ->boolean()
                     ->sortable()
                     ->toggleable(),
@@ -108,6 +141,42 @@ class ProductsTable
                     ->boolean()
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('cardmarket_price_avg')
+                    ->label('CM Prezzo medio')
+                    ->numeric()
+                    ->suffix('€')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('cardmarket_price_low')
+                    ->label('CM Prezzo basso')
+                    ->numeric()
+                    ->suffix('€')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('cardmarket_price_trend')
+                    ->label('CM Prezzo trend')
+                    ->numeric()
+                    ->suffix('€')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('cardmarket_price_avg1')
+                    ->label('CM Prezzo medio 1')
+                    ->numeric()
+                    ->suffix('€')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('cardmarket_price_avg7')
+                    ->label('CM Prezzo medio 7')
+                    ->numeric()
+                    ->suffix('€')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('cardmarket_price_avg30')
+                    ->label('CM Prezzo medio 30')
+                    ->numeric()
+                    ->suffix('€')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('last_update')
                     ->label('Ultimo aggiornamento')
                     ->dateTime()
@@ -139,8 +208,16 @@ class ProductsTable
                     ->searchable()
                     ->multiple()
                     ->preload(),
+                SelectFilter::make('regulation_mark')
+                    ->label('Lettera')
+                    ->options(RegulationMark::class)
+                    ->searchable()
+                    ->multiple()
+                    ->preload(),
                 TernaryFilter::make('tournament_legal')
-                    ->label('Legale per i tornei'),
+                    ->label('Legale standard'),
+                TernaryFilter::make('tournament_extended_legal')
+                    ->label('Legale esteso'),
                 TernaryFilter::make('reverse')
                     ->label('Reverse'),
                 TernaryFilter::make('signed')
