@@ -3,7 +3,7 @@
 # =========================
 FROM php:8.4-cli AS build
 
-# Install system dependencies e estensioni PHP richieste da Laravel + Filament + Horizon
+# Install system dependencies e estensioni PHP richieste da Composer
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -13,42 +13,37 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libicu-dev \
     libxml2-dev \
-    libcurl4-openssl-dev \
     libonig-dev \
-    openssl \
+    && docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
     && docker-php-ext-install \
         pdo_mysql \
         zip \
         bcmath \
         exif \
         intl \
-        dom \
         gd \
-        curl \
         opcache \
-        ctype \
-        fileinfo \
         mbstring \
-        tokenizer \
+        pcntl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Composer
+# Copia Composer dal container ufficiale
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Imposta working directory
 WORKDIR /app
 
-# Copia solo composer per caching layer
+# Copia solo i file composer per installare le dipendenze
 COPY composer.json composer.lock ./
 
-# Composer install (solo pacchetti di produzione, ma con scripts abilitati)
+# Install dependencies senza eseguire gli script (build stage)
 RUN composer install \
     --no-dev \
     --prefer-dist \
     --no-interaction \
-    --no-progress
+    --no-progress \
+    --no-scripts
 
-# Copia tutto il codice
+# Copia tutto il progetto
 COPY . .
 
 # Ottimizza autoload
@@ -59,6 +54,7 @@ RUN composer dump-autoload --optimize --no-dev
 # =========================
 FROM php:8.4-apache
 
+# Install system dependencies e estensioni PHP richieste in produzione
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     libpng-dev \
@@ -66,11 +62,9 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     libicu-dev \
     libxml2-dev \
-    unzip \
     libonig-dev \
-    && docker-php-ext-configure gd \
-        --with-freetype=/usr/include/ \
-        --with-jpeg=/usr/include/ \
+    unzip \
+    && docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
     && docker-php-ext-install \
         pdo_mysql \
         zip \
@@ -80,32 +74,27 @@ RUN apt-get update && apt-get install -y \
         gd \
         opcache \
         mbstring \
+        pcntl \
     && a2enmod rewrite \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set document root Laravel
+# Imposta document root su /public
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
-    && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
-
-# Working directory
 WORKDIR /var/www/html
 
-# Copia il build stage
+# Copia il progetto dal build stage
 COPY --from=build /app /var/www/html
 
-# Permessi su storage e bootstrap/cache
+# Setta permessi
 RUN chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-# Copia entrypoint
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Espone porta Apache
 EXPOSE 80
 
-# ENTRYPOINT
+# EntryPoint per comandi Laravel post-deploy
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

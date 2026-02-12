@@ -3,8 +3,8 @@ version: "3.9"
 services:
 
   app:
-    build: .
-    container_name: laravel_app
+    image: breschi/cttools:latest
+    container_name: cttools_app
     ports:
       - "8080:80"
     environment:

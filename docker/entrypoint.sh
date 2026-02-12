@@ -1,6 +1,14 @@
 #!/bin/sh
 
+# ========================
+# Entrypoint Laravel + Apache
+# ========================
+
 echo "Waiting for database..."
+
+TRIES=0
+MAX_TRIES=30   # circa 1 minuto se sleep=2
+SLEEP=2
 
 until php -r "
 try {
@@ -9,17 +17,23 @@ try {
         getenv('DB_USERNAME'),
         getenv('DB_PASSWORD')
     );
-    echo 'Database ready';
 } catch (Exception \$e) {
     exit(1);
 }"
 do
-  sleep 2
+    TRIES=$((TRIES+1))
+    if [ $TRIES -ge $MAX_TRIES ]; then
+        echo "Database not ready after $((MAX_TRIES * SLEEP)) seconds. Starting anyway..."
+        break
+    fi
+    echo "Database not ready yet, retrying ($TRIES/$MAX_TRIES)..."
+    sleep $SLEEP
 done
 
 echo "Running Laravel commands..."
 
-php artisan migrate --force
+# Esegui migrate + cleanup / cache
+php artisan migrate --force || echo "Migration failed, will retry later"
 php artisan cache:clear
 php artisan config:clear
 php artisan route:clear
@@ -30,5 +44,4 @@ php artisan optimize
 php artisan filament:optimize
 
 echo "Starting Apache..."
-
 exec apache2-foreground
