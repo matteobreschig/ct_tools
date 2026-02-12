@@ -9,7 +9,7 @@ services:
     environment:
       APP_NAME: "CT Tools"
       APP_ENV: production
-      APP_DEBUG: "true"
+      APP_DEBUG: ${APP_DEBUG}
       APP_KEY: ${APP_KEY}
       APP_LOCALE: ${APP_LOCALE}
       APP_TIMEZONE: ${APP_TIMEZONE}
