@@ -70,7 +70,11 @@ class ProductsTable
                     ->toggleable(),
                 TextColumn::make('price')
                     ->label('Prezzo')
-                    ->numeric()
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
@@ -143,37 +147,61 @@ class ProductsTable
                     ->toggleable(),
                 TextColumn::make('cardmarket_price_avg')
                     ->label('CM Prezzo medio')
-                    ->numeric()
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('cardmarket_price_low')
                     ->label('CM Prezzo basso')
-                    ->numeric()
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('cardmarket_price_trend')
                     ->label('CM Prezzo trend')
-                    ->numeric()
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('cardmarket_price_avg1')
                     ->label('CM Prezzo medio 1')
-                    ->numeric()
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('cardmarket_price_avg7')
                     ->label('CM Prezzo medio 7')
-                    ->numeric()
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('cardmarket_price_avg30')
                     ->label('CM Prezzo medio 30')
-                    ->numeric()
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
