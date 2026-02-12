@@ -3,7 +3,7 @@
 # =========================
 FROM php:8.4-cli AS build
 
-# Install dependencies di sistema
+# Install system dependencies e estensioni PHP richieste da Laravel + Filament + Horizon
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     libxml2-dev \
     libcurl4-openssl-dev \
+    libonig-dev \
     openssl \
     && docker-php-ext-install \
         pdo_mysql \
@@ -25,8 +26,11 @@ RUN apt-get update && apt-get install -y \
         gd \
         curl \
         opcache \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+        ctype \
+        fileinfo \
+        mbstring \
+        tokenizer \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -37,7 +41,7 @@ WORKDIR /app
 # Copia solo composer per caching layer
 COPY composer.json composer.lock ./
 
-# Composer install (solo pacchetti produzione ma con scripts)
+# Composer install (solo pacchetti di produzione, ma con scripts abilitati)
 RUN composer install \
     --no-dev \
     --prefer-dist \
@@ -55,7 +59,7 @@ RUN composer dump-autoload --optimize --no-dev
 # =========================
 FROM php:8.4-apache
 
-# Install dependencies richieste
+# Install system dependencies e estensioni PHP
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     libpng-dev \
@@ -65,6 +69,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     unzip \
     libcurl4-openssl-dev \
+    libonig-dev \
     && docker-php-ext-install \
         pdo_mysql \
         zip \
@@ -75,9 +80,12 @@ RUN apt-get update && apt-get install -y \
         gd \
         curl \
         opcache \
+        ctype \
+        fileinfo \
+        mbstring \
+        tokenizer \
     && a2enmod rewrite \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set document root Laravel
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
