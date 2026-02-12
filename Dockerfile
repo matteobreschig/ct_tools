@@ -88,9 +88,16 @@ WORKDIR /var/www/html
 # Copia il progetto dal build stage
 COPY --from=build /app /var/www/html
 
-# Setta permessi
+# Setta permessi e prepara log
 RUN chown -R www-data:www-data storage bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache \
+    && mkdir -p storage/logs \
+    && touch storage/logs/laravel.log \
+    && chown www-data:www-data storage/logs/laravel.log
+
+# Install PHP Redis extension
+RUN pecl install redis \
+    && docker-php-ext-enable redis
 
 EXPOSE 80
 
