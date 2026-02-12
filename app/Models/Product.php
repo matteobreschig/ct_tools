@@ -74,7 +74,9 @@ class Product extends Model
     public static function booted(): void
     {
         static::creating(function (Product $item) {
-            $item->user_id = auth()->id();
+            if (!$item->user_id) {
+                $item->user_id = auth()->id();
+            }
         });
     }
 
