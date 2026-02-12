@@ -59,7 +59,6 @@ RUN composer dump-autoload --optimize --no-dev
 # =========================
 FROM php:8.4-apache
 
-# Install system dependencies e estensioni PHP
 RUN apt-get update && apt-get install -y \
     libzip-dev \
     libpng-dev \
@@ -68,24 +67,22 @@ RUN apt-get update && apt-get install -y \
     libicu-dev \
     libxml2-dev \
     unzip \
-    libcurl4-openssl-dev \
     libonig-dev \
+    && docker-php-ext-configure gd \
+        --with-freetype=/usr/include/ \
+        --with-jpeg=/usr/include/ \
     && docker-php-ext-install \
         pdo_mysql \
         zip \
         bcmath \
         exif \
         intl \
-        dom \
         gd \
-        curl \
         opcache \
-        ctype \
-        fileinfo \
         mbstring \
-        tokenizer \
     && a2enmod rewrite \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set document root Laravel
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
