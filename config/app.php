@@ -123,5 +123,5 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    'ct_disable_price' => env('CT_DISABLE_PRICE'),
+    'ct_disable_price' => env('CT_DISABLE_PRICE', 99999),
 ];
