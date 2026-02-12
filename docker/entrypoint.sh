@@ -43,5 +43,7 @@ php artisan filament:optimize-clear
 php artisan optimize
 php artisan filament:optimize
 
+php artisan horizon &
+
 echo "Starting Apache..."
 exec apache2-foreground
