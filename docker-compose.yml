@@ -41,7 +41,7 @@ services:
   scheduler:
     image: breschi/cttools:latest
     container_name: cttools_scheduler
-    command: sh -c "while true; do php artisan schedule:run; sleep 60; done"
+    command: php artisan schedule:work
     environment:
       APP_ENV: production
       APP_KEY: "${APP_KEY}"
@@ -53,6 +53,9 @@ services:
       DB_USERNAME: "${DB_USERNAME}"
       DB_PASSWORD: "${DB_PASSWORD}"
 
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
       REDIS_HOST: redis
 
     depends_on:
