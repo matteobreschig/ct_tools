@@ -20,18 +20,55 @@ class TrackedBlueprintNotificationsRelationManager extends RelationManager
         return $table
             ->columns([
                 TextColumn::make('datetime')
-                    ->label('Data e ora'),
+                    ->label('Data e ora')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('price')
-                    ->label('Prezzo'),
+                    ->label('Prezzo')
+                    ->suffix('€')
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('quantity')
-                    ->label('Quantità'),
+                    ->label('Quantità')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('condition')
-                    ->label('Condizione'),
+                    ->label('Condizione')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('language')
-                    ->label('Lingua'),
+                    ->label('Lingua')
+                    ->sortable()
+                    ->toggleable(),
                 IconColumn::make('ct_zero')
                     ->label('CT Zero')
-                    ->boolean(),
+                    ->boolean()
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('ct_user_name')
+                    ->label('Condizione')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('ct_user_country_code')
+                    ->label('Condizione')
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('created_at')
+                    ->label('Creato il')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(),
+                TextColumn::make('updated_at')
+                    ->label('Aggiornato il')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(),
             ]);
     }
 

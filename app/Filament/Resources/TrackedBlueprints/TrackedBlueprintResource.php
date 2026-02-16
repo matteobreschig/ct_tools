@@ -56,9 +56,4 @@ class TrackedBlueprintResource extends Resource
     {
         return static::getModel()::query()->where('user_id' , auth()->id());
     }
-
-    public static function canAccess(): bool
-    {
-        return Auth::user()->isAdmin();
-    }
 }

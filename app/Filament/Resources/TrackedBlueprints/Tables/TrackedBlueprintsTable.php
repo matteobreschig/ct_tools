@@ -18,30 +18,49 @@ class TrackedBlueprintsTable
             ->columns([
                 TextColumn::make('blueprint_name')
                     ->label('Nome')
-                    ->searchable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('blueprint_expansion_code')
                     ->label('Espansione')
-                    ->searchable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('blueprint_collector_number')
                     ->label('Numero')
-                    ->searchable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('price')
                     ->label('Prezzo desiderato')
                     ->suffix('€')
-                    ->numeric(),
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('minimum_quantity')
                     ->label('Quantità minima')
-                    ->numeric(),
+                    ->numeric()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('conditions')
-                    ->label('Condizioni'),
+                    ->label('Condizioni')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('languages')
-                    ->label('Lingue'),
+                    ->label('Lingue')
+                    ->sortable()
+                    ->toggleable(),
                 IconColumn::make('ct_zero_only')
                     ->label('Solo CT Zero')
-                    ->boolean(),
+                    ->boolean()
+                    ->sortable()
+                    ->toggleable(),
                 IconColumn::make('active')
                     ->label('Attivo')
                     ->boolean()
+                    ->sortable()
+                    ->toggleable()
             ])
             ->filters([
                 //
