@@ -8,6 +8,7 @@ use App\Models\TrackedBlueprintNotification;
 use App\Services\CTApiClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\RateLimited;
 
 class UpdateBlueprintPrice implements ShouldQueue
 {
@@ -23,6 +24,11 @@ class UpdateBlueprintPrice implements ShouldQueue
     {
         $this->trackedBlueprint = $trackedBlueprint;
         $this->registerAllPrices = $registerAllPrices;
+    }
+
+    public function middleware(): array
+    {
+        return [new RateLimited('update-blueprint-price')];
     }
 
     /**
