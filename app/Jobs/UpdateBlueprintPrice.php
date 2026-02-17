@@ -9,6 +9,7 @@ use App\Services\CTApiClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Support\Str;
 
 class UpdateBlueprintPrice implements ShouldQueue
 {
@@ -38,7 +39,7 @@ class UpdateBlueprintPrice implements ShouldQueue
     {
         $client = new CTApiClient($this->trackedBlueprint->user);
         foreach($this->trackedBlueprint->languages as $language) {
-            $response = $client->get('/marketplace/products', ['blueprint_id' => $this->trackedBlueprint->blueprint_id, 'language' => $language->getLabel()]);
+            $response = $client->get('/marketplace/products', ['blueprint_id' => $this->trackedBlueprint->blueprint_id, 'language' => Str::lower($language->getLabel())]);
             if($response->successful()) {
                 $responseData = $response->json();
                 foreach($responseData[$this->trackedBlueprint->blueprint_id] as $item) {

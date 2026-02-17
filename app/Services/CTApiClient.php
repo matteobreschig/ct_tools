@@ -60,7 +60,7 @@ class CTApiClient
         array $data = [],
         array $query = []
     ): Response {
-        //$this->checkRateLimit();
+        $this->checkRateLimit();
 
         $queryParams = $this->buildQueryParams($query);
 
