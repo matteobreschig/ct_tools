@@ -205,6 +205,11 @@ class ProductsTable
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('created_at')
+                    ->label('Data di creazione')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('last_update')
                     ->label('Ultimo aggiornamento')
                     ->dateTime()

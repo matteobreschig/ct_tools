@@ -7,8 +7,10 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 
 class TrackedBlueprintsTable
 {
@@ -16,11 +18,30 @@ class TrackedBlueprintsTable
     {
         return $table
             ->columns([
+                ImageColumn::make('blueprint_image_url')
+                    ->label('')
+                    ->tooltip(function($state) {
+                        return new HtmlString("
+                            <div style='padding:8px'>
+                                <img
+                                    src='{$state}/high.webp'
+                                    style='max-width:300px; height:auto; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2);'
+                                    loading='lazy'
+                                >
+                            </div>
+                        ");
+                    })
+                    ->extraImgAttributes(function($state) {
+                        return [
+                            'src' => $state . '/low.webp',
+                            'loading' => 'lazy',
+                        ];
+                    }),
                 TextColumn::make('blueprint_name')
                     ->label('Nome')
                     ->sortable()
                     ->toggleable(),
-                TextColumn::make('blueprint_expansion_code')
+                TextColumn::make('blueprintExpansion.name')
                     ->label('Espansione')
                     ->sortable()
                     ->toggleable(),

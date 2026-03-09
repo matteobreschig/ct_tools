@@ -18,14 +18,22 @@ class TrackedBlueprint extends Model
         'blueprint_id',
         'blueprint_url',
         'blueprint_name',
-        'blueprint_expansion_code',
+        'blueprint_expansion_id',
         'blueprint_collector_number',
+        'blueprint_image_url',
         'active',
         'price',
         'minimum_quantity',
         'conditions',
         'languages',
         'ct_zero_only',
+        'cardmarket_product_id',
+        'cardmarket_price_avg',
+        'cardmarket_price_low',
+        'cardmarket_price_trend',
+        'cardmarket_price_avg1',
+        'cardmarket_price_avg7',
+        'cardmarket_price_avg30',
     ];
 
     /**
@@ -41,6 +49,12 @@ class TrackedBlueprint extends Model
             'ct_zero_only' => 'boolean',
             'conditions' => AsEnumCollection::class::of(ConditionType::class),
             'languages' => AsEnumCollection::class::of(Language::class),
+            'cardmarket_price_avg' => MoneyCast::class,
+            'cardmarket_price_low' => MoneyCast::class,
+            'cardmarket_price_trend' => MoneyCast::class,
+            'cardmarket_price_avg1' => MoneyCast::class,
+            'cardmarket_price_avg7' => MoneyCast::class,
+            'cardmarket_price_avg30' => MoneyCast::class,
         ];
     }
 
@@ -49,6 +63,11 @@ class TrackedBlueprint extends Model
         static::creating(function (TrackedBlueprint $item) {
             $item->user_id = auth()->id();
         });
+    }
+
+    public function blueprintExpansion(): BelongsTo
+    {
+        return $this->belongsTo(Expansion::class);
     }
 
     public function user(): BelongsTo
