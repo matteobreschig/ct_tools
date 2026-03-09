@@ -17,7 +17,8 @@
         "nyholm/psr7": "^1.8",
         "stechstudio/filament-impersonate": "^4.0",
         "symfony/cache": "^8.0",
-        "tcgdex/sdk": "^2.2"
+        "tcgdex/sdk": "^2.2",
+        "ext-pdo": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

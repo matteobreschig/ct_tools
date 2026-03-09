@@ -48,7 +48,7 @@ class TrackedBlueprintNotification extends Model
         });
 
         static::updating(function (TrackedBlueprintNotification $item) {
-            if ($item->isDirty('price') && $item->status < $item->getOriginal('price')) {
+            if ($item->isDirty('price') && $item->price < $item->getOriginal('price')) {
                 Notification::make()
                     ->title('Il prodotto ' . $item->trackedBlueprint->blueprint_name . ' è sceso di prezzo!')
                     ->body($item->trackedBlueprint->blueprint_name . ' ora è venduto a ' . $item->price . '€ dal venditore ' . $item->ct_user_name)

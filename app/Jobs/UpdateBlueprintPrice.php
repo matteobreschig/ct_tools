@@ -44,8 +44,12 @@ class UpdateBlueprintPrice implements ShouldQueue
                 $responseData = $response->json();
                 foreach($responseData[$this->trackedBlueprint->blueprint_id] as $item) {
                     if(($item['price_cents'] / 100) < $this->trackedBlueprint->price) {
-                        if((int)$item['quantity'] >= $this->trackedBlueprint->quantity) {
-                            if($this->trackedBlueprint->conditions->contains(ConditionType::from(ConditionType::fromApiLabel($item['properties_hash']['condition'])))) {
+                        if((int)$item['quantity'] >= $this->trackedBlueprint->minimum_quantity) {
+                            $conditionKey = ConditionType::fromApiLabel($item['properties_hash']['condition']);
+                            if($conditionKey === null) {
+                                continue;
+                            }
+                            if($this->trackedBlueprint->conditions->contains(ConditionType::from($conditionKey))) {
                                 if($this->trackedBlueprint->ct_zero_only && !$item['user']['can_sell_sealed_with_ct_zero']) {
                                     continue;
                                 }

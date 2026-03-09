@@ -42,6 +42,7 @@ enum ConditionType: string implements HasLabel
             'Moderately Played' => 'mp',
             'Played' => 'pl',
             'Poor' => 'po',
+            default => null,
         };
     }
 }
