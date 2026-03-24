@@ -18,6 +18,11 @@ class TrackedBlueprintsTable
     {
         return $table
             ->columns([
+                IconColumn::make('blueprint_url')
+                    ->label('')
+                    ->url(fn ($record) => $record->blueprint_url, shouldOpenInNewTab: true)
+                    ->icon('heroicon-o-link')
+                    ->toggleable(),
                 ImageColumn::make('blueprint_image_url')
                     ->label('')
                     ->tooltip(function($state) {
