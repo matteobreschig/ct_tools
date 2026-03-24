@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Casts\MoneyCast;
+use App\Notifications\BlueprintPriceAlert;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,22 +40,38 @@ class TrackedBlueprintNotification extends Model
     public static function booted(): void
     {
         static::creating(function (TrackedBlueprintNotification $item) {
+            $user = $item->trackedBlueprint->user;
+            $title = 'Il prodotto ' . $item->trackedBlueprint->blueprint_name . ' ha raggiunto il prezzo desiderato!';
+            $body = $item->trackedBlueprint->blueprint_name . ' ora è venduto a ' . $item->price . '€ dal venditore ' . $item->ct_user_name;
+
             Notification::make()
-                ->title('Il prodotto ' . $item->trackedBlueprint->blueprint_name . ' ha raggiunto il prezzo desiderato!')
-                ->body($item->trackedBlueprint->blueprint_name . ' ora è venduto a ' . $item->price . '€ dal venditore ' . $item->ct_user_name)
+                ->title($title)
+                ->body($body)
                 ->success()
-                ->sendToDatabase($item->trackedBlueprint->user)
+                ->sendToDatabase($user)
                 ->send();
+
+            if ($user->telegram_chat_id) {
+                $user->notify(new BlueprintPriceAlert($title, $body));
+            }
         });
 
         static::updating(function (TrackedBlueprintNotification $item) {
             if ($item->isDirty('price') && $item->price < $item->getOriginal('price')) {
+                $user = $item->trackedBlueprint->user;
+                $title = 'Il prodotto ' . $item->trackedBlueprint->blueprint_name . ' è sceso di prezzo!';
+                $body = $item->trackedBlueprint->blueprint_name . ' ora è venduto a ' . $item->price . '€ dal venditore ' . $item->ct_user_name;
+
                 Notification::make()
-                    ->title('Il prodotto ' . $item->trackedBlueprint->blueprint_name . ' è sceso di prezzo!')
-                    ->body($item->trackedBlueprint->blueprint_name . ' ora è venduto a ' . $item->price . '€ dal venditore ' . $item->ct_user_name)
+                    ->title($title)
+                    ->body($body)
                     ->success()
-                    ->sendToDatabase($item->trackedBlueprint->user)
+                    ->sendToDatabase($user)
                     ->send();
+
+                if ($user->telegram_chat_id) {
+                    $user->notify(new BlueprintPriceAlert($title, $body));
+                }
             }
         });
     }
