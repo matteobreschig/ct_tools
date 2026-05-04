@@ -3,11 +3,13 @@
 namespace App\Jobs;
 
 use App\Enums\ConditionType;
+use App\Exceptions\ApiRateLimitException;
 use App\Models\TrackedBlueprint;
 use App\Models\TrackedBlueprintNotification;
 use App\Services\CTApiClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Str;
 
@@ -39,7 +41,18 @@ class UpdateBlueprintPrice implements ShouldQueue
     {
         $client = new CTApiClient($this->trackedBlueprint->user);
         foreach($this->trackedBlueprint->languages as $language) {
-            $response = $client->get('/marketplace/products', ['blueprint_id' => $this->trackedBlueprint->blueprint_id, 'language' => Str::lower($language->getLabel())]);
+            try {
+                $response = $client->get('/marketplace/products', ['blueprint_id' => $this->trackedBlueprint->blueprint_id, 'language' => Str::lower($language->getLabel())]);
+            } catch (ApiRateLimitException) {
+                $this->release(10);
+                return;
+            } catch (RequestException $e) {
+                if ($e->response?->status() === 429) {
+                    $this->release(10);
+                    return;
+                }
+                throw $e;
+            }
             if($response->successful()) {
                 $responseData = $response->json();
                 foreach($responseData[$this->trackedBlueprint->blueprint_id] as $item) {

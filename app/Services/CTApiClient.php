@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\ApiRateLimitException;
 use App\Models\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Http;
@@ -64,7 +65,7 @@ class CTApiClient
 
         $queryParams = $this->buildQueryParams($query);
 
-        $response = Http::retry(2, 200, function ($exception) {
+        $response = Http::retry(3, 1000, function ($exception) {
             return $exception->response?->status() === 429;
         })
             ->baseUrl($this->baseUrl)
@@ -86,12 +87,18 @@ class CTApiClient
 
     protected function checkRateLimit(): void
     {
-        $key = 'external-api:user:' . $this->user->id;
-
-        if (RateLimiter::tooManyAttempts($key, $this->maxAttempts)) {
-            throw new \RuntimeException('Rate limit API superato per utente');
+        // Global cap: stay under the CardTrader API's 10 req/sec limit
+        $globalKey = 'cardtrader-api:global';
+        if (RateLimiter::tooManyAttempts($globalKey, 8)) {
+            throw new ApiRateLimitException('Global CardTrader API rate limit exceeded');
         }
+        RateLimiter::hit($globalKey, 1);
 
-        RateLimiter::hit($key, $this->decaySeconds);
+        // Per-user cap: prevent a single user from monopolising the quota
+        $userKey = 'cardtrader-api:user:' . $this->user->id;
+        if (RateLimiter::tooManyAttempts($userKey, $this->maxAttempts)) {
+            throw new ApiRateLimitException('Per-user API rate limit exceeded');
+        }
+        RateLimiter::hit($userKey, $this->decaySeconds);
     }
 }
