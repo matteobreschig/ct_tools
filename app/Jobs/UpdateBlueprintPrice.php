@@ -17,6 +17,8 @@ class UpdateBlueprintPrice implements ShouldQueue
 {
     use Queueable;
 
+    public int $tries = 0; // unlimited — retryUntil() sets the deadline instead
+
     public TrackedBlueprint $trackedBlueprint;
     public bool $registerAllPrices;
 
@@ -27,6 +29,11 @@ class UpdateBlueprintPrice implements ShouldQueue
     {
         $this->trackedBlueprint = $trackedBlueprint;
         $this->registerAllPrices = $registerAllPrices;
+    }
+
+    public function retryUntil(): \DateTime
+    {
+        return now()->addHours(1);
     }
 
     public function middleware(): array
