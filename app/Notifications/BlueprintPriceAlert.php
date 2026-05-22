@@ -23,8 +23,12 @@ class BlueprintPriceAlert extends Notification
 
     public function toTelegram(object $notifiable): TelegramMessage
     {
+        $title = htmlspecialchars($this->title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $body = htmlspecialchars($this->body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
         return TelegramMessage::create()
             ->to($notifiable->telegram_chat_id)
-            ->content("*{$this->title}*\n{$this->body}");
+            ->options(['parse_mode' => 'HTML'])
+            ->content("<b>{$title}</b>\n{$body}");
     }
 }
