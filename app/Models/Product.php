@@ -21,6 +21,7 @@ class Product extends Model
         'sale',
         'blueprint_id',
         'cardmarket_product_id',
+        'meta_name',
         'category_id',
         'expansion_id',
         'collector_number',

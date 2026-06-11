@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enums\ConditionType;
 use App\Models\Category;
+use App\Models\CtBlueprint;
 use App\Models\Expansion;
 use App\Models\Product;
 use App\Services\CTApiClient;
@@ -89,6 +90,12 @@ class SyncProducts implements ShouldQueue
             $categories = Category::pluck('id', 'ct_id');
             $expansions = Expansion::pluck('id', 'ct_id');
             $expansionsTcgdex = Expansion::pluck('tcgdex_code', 'ct_id');
+            $metaNames = CtBlueprint::whereNotNull('meta_name')->pluck('meta_name', 'blueprint_id');
+
+            // Nomi italiani trovati durante questo ciclo, indicizzati per meta_name,
+            // e prodotti rimasti col nome inglese da correggere a fine ciclo.
+            $italianNamesByMeta = [];
+            $pendingTranslation = [];
 
             foreach($productsData as $productData) {
                 $product = Product::firstOrNew([
@@ -96,21 +103,39 @@ class SyncProducts implements ShouldQueue
                     'user_id' => $this->user->id,
                 ]);
 
-                $collectorNumber = 0;
-                if($productData['properties_hash']['collector_number']) {
-                    $collectorNumber = (int) explode('/', $productData['properties_hash']['collector_number'])[0];
-                }
+                $rawCollectorNumber = trim(explode('/', (string) ($productData['properties_hash']['collector_number'] ?? ''))[0]);
+                $collectorNumber = (int) $rawCollectorNumber;
 
                 $tcgdexProduct = null;
-                if($expansionsTcgdex[$productData['expansion']['id']]) {
-                    if(!$tcgdexProduct = $tcgdexIt->card->get($expansionsTcgdex[$productData['expansion']['id']] . '-' . $collectorNumber)) {
-                        if(!$tcgdexProduct = $tcgdexIt->card->get($expansionsTcgdex[$productData['expansion']['id']] . '-' . str_pad($collectorNumber, 3, '0', STR_PAD_LEFT))) {
-                            if(!$tcgdexProduct = $tcgdexEn->card->get($expansionsTcgdex[$productData['expansion']['id']] . '-' . $collectorNumber)) {
-                                $tcgdexProduct = $tcgdexEn->card->get($expansionsTcgdex[$productData['expansion']['id']] . '-' . str_pad($collectorNumber, 3, '0', STR_PAD_LEFT));
+                $italianMatch = false;
+                $tcgdexCode = $expansionsTcgdex[$productData['expansion']['id']] ?? null;
+                if($tcgdexCode) {
+                    // Provo più varianti del numero di collezione: quello originale con
+                    // eventuali lettere (promo tipo "TG12" o "SWSH123"), quello numerico
+                    // e quello con riempimento a 3 cifre.
+                    $numberCandidates = array_values(array_unique(array_filter([
+                        $rawCollectorNumber,
+                        (string) $collectorNumber,
+                        str_pad($collectorNumber, 3, '0', STR_PAD_LEFT),
+                    ], fn ($number) => $number !== '')));
+
+                    foreach($numberCandidates as $numberCandidate) {
+                        if($tcgdexProduct = $tcgdexIt->card->get($tcgdexCode . '-' . $numberCandidate)) {
+                            $italianMatch = true;
+                            break;
+                        }
+                    }
+
+                    if(!$tcgdexProduct) {
+                        foreach($numberCandidates as $numberCandidate) {
+                            if($tcgdexProduct = $tcgdexEn->card->get($tcgdexCode . '-' . $numberCandidate)) {
+                                break;
                             }
                         }
                     }
                 }
+
+                $cardmarketProductId = $tcgdexProduct?->pricing?->cardmarket?->idProduct;
 
                 $product->fill([
                     'name' => $tcgdexProduct ? $tcgdexProduct->name : $productData['name_en'],
@@ -118,7 +143,7 @@ class SyncProducts implements ShouldQueue
                     'description' => $productData['description'],
                     'quantity' => $productData['quantity'],
                     'blueprint_id' => $productData['blueprint_id'],
-                    'cardmarket_product_id' => $tcgdexProduct?->pricing?->cardmarket?->idProduct,
+                    'cardmarket_product_id' => $cardmarketProductId,
                     'category_id' => $categories[$productData['category_id']],
                     'expansion_id' => $expansions[$productData['expansion']['id']],
                     'collector_number' => $collectorNumber,
@@ -143,16 +168,64 @@ class SyncProducts implements ShouldQueue
                     'last_update' => now(),
                 ]);
 
+                // Imposto il meta_name (chiave di raggruppamento) solo se risolto:
+                // non azzero mai un valore esistente, così le unioni manuali
+                // sopravvivono alla sincronizzazione.
+                $metaName = $metaNames[$productData['blueprint_id']] ?? null;
+                if ($metaName !== null) {
+                    $product->meta_name = $metaName;
+                }
+
                 if ($productData['price_cents'] < config('app.ct_disable_price') * 100) {
                     $product->price = $productData['price_cents'] / 100;
+                } elseif (!$product->exists) {
+                    // Prodotto nuovo già al prezzo di disattivazione su Cardtrader:
+                    // lo registro direttamente come non in vendita.
+                    $product->sale = false;
                 }
 
                 $product->save();
+
+                // Memorizzo il nome italiano per gruppo di ristampe e segno i prodotti
+                // rimasti col nome inglese: a fine ciclo riuso la traduzione trovata
+                // su un'altra versione della stessa carta.
+                if ($metaName !== null) {
+                    if ($italianMatch) {
+                        $italianNamesByMeta[$metaName] ??= $product->name;
+                    } else {
+                        $pendingTranslation[$metaName][] = $product;
+                    }
+                }
+            }
+
+            foreach ($pendingTranslation as $metaName => $products) {
+                if (!isset($italianNamesByMeta[$metaName])) {
+                    continue;
+                }
+
+                foreach ($products as $pendingProduct) {
+                    $pendingProduct->update(['name' => $italianNamesByMeta[$metaName]]);
+                }
             }
 
             Product::where('user_id', $this->user->id)
                 ->whereNotIn('product_id', $ctProductIds)
                 ->delete();
+
+            // Carte nuove con blueprint non ancora mappato: accodo subito il
+            // recupero dei meta_name invece di aspettare il giro giornaliero.
+            // Il job è unico, accodarlo mentre uno gira non crea doppioni.
+            $hasUnmappedBlueprints = Product::query()
+                ->whereNotNull('blueprint_id')
+                ->whereNotExists(fn ($q) => $q
+                    ->selectRaw('1')
+                    ->from('ct_blueprints')
+                    ->whereColumn('ct_blueprints.blueprint_id', 'products.blueprint_id'))
+                ->exists();
+
+            if ($hasUnmappedBlueprints) {
+                SyncCardtraderBlueprints::dispatch($this->user);
+            }
 
             Notification::make()
                 ->title('Sincronizzazione completata con successo')

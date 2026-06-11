@@ -1,0 +1,138 @@
+<?php
+
+namespace App\Filament\Resources\CardGroups\RelationManagers;
+
+use App\Services\CTApiClient;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Forms\Components\ToggleButtons;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
+
+class VersionsRelationManager extends RelationManager
+{
+    protected static string $relationship = 'products';
+
+    protected static ?string $title = 'Versioni';
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                ImageColumn::make('image_url')
+                    ->label('')
+                    ->tooltip(function ($state) {
+                        return new HtmlString("
+                            <div style='padding:8px'>
+                                <img
+                                    src='{$state}/high.webp'
+                                    style='max-width:300px; height:auto; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2);'
+                                    loading='lazy'
+                                >
+                            </div>
+                        ");
+                    })
+                    ->extraImgAttributes(function ($state) {
+                        return [
+                            'src' => $state . '/low.webp',
+                            'loading' => 'lazy',
+                        ];
+                    }),
+                IconColumn::make('sale')
+                    ->label('In vendita')
+                    ->boolean()
+                    ->sortable(),
+                TextColumn::make('expansion.name')
+                    ->label('Espansione')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('collector_number')
+                    ->label('Numero')
+                    ->sortable(),
+                TextColumn::make('language')
+                    ->label('Lingua')
+                    ->badge()
+                    ->sortable(),
+                TextColumn::make('condition')
+                    ->label('Condizione')
+                    ->badge()
+                    ->sortable(),
+                IconColumn::make('reverse')
+                    ->label('Reverse')
+                    ->boolean()
+                    ->sortable(),
+                TextColumn::make('quantity')
+                    ->label('Quantità')
+                    ->numeric()
+                    ->sortable(),
+                TextColumn::make('price')
+                    ->label('Prezzo')
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
+                    ->suffix(' €')
+                    ->sortable(),
+                TextColumn::make('cardmarket_price_low')
+                    ->label('CM prezzo basso')
+                    ->numeric(
+                        decimalPlaces: 2,
+                        decimalSeparator: ',',
+                        thousandsSeparator: '.'
+                    )
+                    ->suffix(' €')
+                    ->sortable(),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('set_sale_status')
+                        ->label('Imposta stato vendita')
+                        ->icon(Heroicon::Banknotes)
+                        ->requiresConfirmation()
+                        ->schema([
+                            ToggleButtons::make('sale_status')
+                                ->label('Stato vendita')
+                                ->inline()
+                                ->required()
+                                ->options([
+                                    'set_on_sale' => 'In vendita',
+                                    'set_off_sale' => 'Non in vendita',
+                                ])
+                                ->icons([
+                                    'set_on_sale' => Heroicon::HandThumbUp,
+                                    'set_off_sale' => Heroicon::HandThumbDown,
+                                ]),
+                        ])
+                        ->action(function (array $data, Collection $records) {
+                            $ctData = ['products' => []];
+
+                            $records->each(function ($model) use ($data, &$ctData) {
+                                $model->sale = $data['sale_status'] == 'set_on_sale';
+                                $model->save();
+
+                                $ctData['products'][] = [
+                                    'id' => $model->product_id,
+                                    'price' => $data['sale_status'] == 'set_on_sale' ? $model->price : config('app.ct_disable_price'),
+                                ];
+                            });
+
+                            $client = new CTApiClient(Auth::user());
+                            $client->post('/products/bulk_update', $ctData)->json();
+                        }),
+                ]),
+            ]);
+    }
+
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
+}
