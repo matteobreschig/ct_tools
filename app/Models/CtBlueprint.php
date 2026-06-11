@@ -15,5 +15,6 @@ class CtBlueprint extends Model
         'meta_name',
         'cardmarket_product_id',
         'name',
+        'image_url',
     ];
 }

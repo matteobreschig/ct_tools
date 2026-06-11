@@ -91,6 +91,9 @@ class SyncProducts implements ShouldQueue
             $expansions = Expansion::pluck('id', 'ct_id');
             $expansionsTcgdex = Expansion::pluck('tcgdex_code', 'ct_id');
             $metaNames = CtBlueprint::whereNotNull('meta_name')->pluck('meta_name', 'blueprint_id');
+            $blueprintImages = CtBlueprint::whereNotNull('image_url')
+                ->where('image_url', '!=', '')
+                ->pluck('image_url', 'blueprint_id');
 
             // Nomi italiani trovati durante questo ciclo, indicizzati per meta_name,
             // e prodotti rimasti col nome inglese da correggere a fine ciclo.
@@ -139,7 +142,7 @@ class SyncProducts implements ShouldQueue
 
                 $product->fill([
                     'name' => $tcgdexProduct ? $tcgdexProduct->name : $productData['name_en'],
-                    'image_url' => $tcgdexProduct?->image,
+                    'image_url' => $tcgdexProduct?->image ?? $blueprintImages[$productData['blueprint_id']] ?? null,
                     'description' => $productData['description'],
                     'quantity' => $productData['quantity'],
                     'blueprint_id' => $productData['blueprint_id'],
@@ -150,6 +153,13 @@ class SyncProducts implements ShouldQueue
                     'condition' => isset($productData['properties_hash']['condition'])
                         ? ConditionType::fromApiLabel($productData['properties_hash']['condition'])
                         : ConditionType::NM,
+                    // Categoria TCGdex localizzata: normalizzo sui tre tipi interni.
+                    'card_type' => match ($tcgdexProduct?->category) {
+                        'Pokémon', 'Pokemon' => 'pokemon',
+                        'Allenatore', 'Trainer' => 'trainer',
+                        'Energia', 'Energy' => 'energy',
+                        default => null,
+                    },
                     'regulation_mark' => $tcgdexProduct?->regulationMark,
                     'tournament_legal' => $tcgdexProduct?->legal->standard ?? false,
                     'tournament_extended_legal' => $tcgdexProduct?->legal->expanded,
@@ -208,6 +218,10 @@ class SyncProducts implements ShouldQueue
                 }
             }
 
+            // Le ristampe senza corrispondenza TCGdex ereditano il tipo carta
+            // dalle versioni gemelle.
+            Product::backfillCardTypeFromSiblings();
+
             Product::where('user_id', $this->user->id)
                 ->whereNotIn('product_id', $ctProductIds)
                 ->delete();
@@ -226,6 +240,10 @@ class SyncProducts implements ShouldQueue
             if ($hasUnmappedBlueprints) {
                 SyncCardtraderBlueprints::dispatch($this->user);
             }
+
+            // Riallinea la vendita dinamica alle quantità appena sincronizzate
+            // (il job esce subito se l'utente non ha configurato minimi).
+            ApplyDynamicSale::dispatch($this->user);
 
             Notification::make()
                 ->title('Sincronizzazione completata con successo')

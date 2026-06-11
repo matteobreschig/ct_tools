@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Livewire\MyProfileCtApiKey;
+use App\Livewire\MyProfileDynamicSale;
 use App\Livewire\MyProfileTelegram;
 use App\Livewire\MyProfileGCalendar;
 use Filament\Http\Middleware\Authenticate;
@@ -48,7 +49,7 @@ class AdminPanelProvider extends PanelProvider
                         userMenuLabel: 'Mio profilo',
                         navigationGroup: 'Settings',
                     )
-                    ->myProfileComponents([MyProfileCtApiKey::class, MyProfileTelegram::class]),
+                    ->myProfileComponents([MyProfileCtApiKey::class, MyProfileTelegram::class, MyProfileDynamicSale::class]),
             ])
             ->widgets([
                 AccountWidget::class,

@@ -27,7 +27,25 @@ class User extends Authenticatable implements FilamentUser
         'ct_api_key',
         'role',
         'telegram_chat_id',
+        'keep_quantity',
+        'keep_quantity_pokemon',
+        'keep_quantity_trainer',
+        'keep_quantity_energy',
     ];
+
+    /**
+     * Minimo di copie da tenere per una carta del tipo dato: minimo del tipo
+     * se impostato, altrimenti quello globale. Null = vendita dinamica spenta.
+     */
+    public function keepQuantityForType(?string $cardType): ?int
+    {
+        return match ($cardType) {
+            'pokemon' => $this->keep_quantity_pokemon,
+            'trainer' => $this->keep_quantity_trainer,
+            'energy' => $this->keep_quantity_energy,
+            default => null,
+        } ?? $this->keep_quantity;
+    }
 
     /**
      * The attributes that should be hidden for serialization.

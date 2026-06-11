@@ -5,11 +5,15 @@ namespace App\Models;
 use App\Casts\MoneyCast;
 use App\Enums\ConditionType;
 use App\Enums\Language;
+use App\Models\Concerns\HasCardImageVariants;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class Product extends Model
 {
+    use HasCardImageVariants;
+
     protected $fillable = [
         'user_id',
         'product_id',
@@ -26,6 +30,7 @@ class Product extends Model
         'expansion_id',
         'collector_number',
         'condition',
+        'card_type',
         'regulation_mark',
         'tournament_legal',
         'tournament_extended_legal',
@@ -79,6 +84,26 @@ class Product extends Model
                 $item->user_id = auth()->id();
             }
         });
+    }
+
+    /**
+     * Eredita il tipo carta dalle altre versioni della stessa carta (stesso
+     * meta_name): copre le ristampe assenti da TCGdex, come i Prize Pack.
+     * Cardtrader il tipo non lo espone, le versioni gemelle sì.
+     */
+    public static function backfillCardTypeFromSiblings(): void
+    {
+        DB::statement('
+            UPDATE products p
+            JOIN (
+                SELECT user_id, meta_name, MAX(card_type) AS card_type
+                FROM products
+                WHERE meta_name IS NOT NULL AND card_type IS NOT NULL
+                GROUP BY user_id, meta_name
+            ) src ON src.user_id = p.user_id AND src.meta_name = p.meta_name
+            SET p.card_type = src.card_type
+            WHERE p.card_type IS NULL
+        ');
     }
 
     public function user(): BelongsTo

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Casts\MoneyCast;
+use App\Models\Concerns\HasCardImageVariants;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class CardGroup extends Model
 {
+    use HasCardImageVariants;
+
     protected $table = 'card_groups';
 
     protected $primaryKey = 'group_key';

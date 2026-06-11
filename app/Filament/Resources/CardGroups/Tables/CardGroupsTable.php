@@ -3,10 +3,12 @@
 namespace App\Filament\Resources\CardGroups\Tables;
 
 use App\Models\CardGroup;
+use App\Models\CardGroupSetting;
 use App\Models\Product;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\ImageColumn;
@@ -22,20 +24,24 @@ class CardGroupsTable
             ->columns([
                 ImageColumn::make('image_url')
                     ->label('')
-                    ->tooltip(function ($state) {
+                    ->tooltip(function ($record) {
+                        if (! $record->image_url_high) {
+                            return null;
+                        }
+
                         return new HtmlString("
                             <div style='padding:8px'>
                                 <img
-                                    src='{$state}/high.webp'
+                                    src='{$record->image_url_high}'
                                     style='max-width:300px; height:auto; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2);'
                                     loading='lazy'
                                 >
                             </div>
                         ");
                     })
-                    ->extraImgAttributes(function ($state) {
+                    ->extraImgAttributes(function ($record) {
                         return [
-                            'src' => $state . '/low.webp',
+                            'src' => $record->image_url_low,
                             'loading' => 'lazy',
                         ];
                     }),
@@ -57,6 +63,19 @@ class CardGroupsTable
                     ->badge()
                     ->color(fn ($state) => $state > 0 ? 'success' : 'gray')
                     ->sortable(),
+                TextColumn::make('keep_quantity')
+                    ->label('Da tenere')
+                    ->badge()
+                    // Deroga della carta se presente, poi minimo del tipo, poi globale.
+                    // Deroga in evidenza (info), minimi in grigio, '—' = motore spento.
+                    ->state(fn (CardGroup $record) => CardGroupSetting::where('user_id', $record->user_id)
+                        ->where('group_key', $record->group_key)
+                        ->value('keep_quantity')
+                        ?? auth()->user()->keepQuantityForType($record->products()->value('card_type')))
+                    ->placeholder('—')
+                    ->color(fn (CardGroup $record) => CardGroupSetting::where('user_id', $record->user_id)
+                        ->where('group_key', $record->group_key)
+                        ->exists() ? 'info' : 'gray'),
                 TextColumn::make('price_low')
                     ->label('CM prezzo più basso')
                     ->numeric(
@@ -77,6 +96,38 @@ class CardGroupsTable
             ->recordActions([
                 ViewAction::make()
                     ->label('Versioni'),
+                Action::make('keep_quantity')
+                    ->label('Minimo')
+                    ->icon(Heroicon::LockClosed)
+                    ->fillForm(fn (CardGroup $record) => [
+                        'keep_quantity' => CardGroupSetting::where('user_id', $record->user_id)
+                            ->where('group_key', $record->group_key)
+                            ->value('keep_quantity'),
+                    ])
+                    ->schema([
+                        TextInput::make('keep_quantity')
+                            ->label('Copie minime da tenere per questa carta')
+                            ->numeric()
+                            ->minValue(0)
+                            ->helperText('Lascia vuoto per usare il minimo globale del profilo.'),
+                    ])
+                    ->action(function (array $data, CardGroup $record) {
+                        if ($data['keep_quantity'] === null || $data['keep_quantity'] === '') {
+                            CardGroupSetting::where('user_id', $record->user_id)
+                                ->where('group_key', $record->group_key)
+                                ->delete();
+                        } else {
+                            CardGroupSetting::updateOrCreate(
+                                ['user_id' => $record->user_id, 'group_key' => $record->group_key],
+                                ['keep_quantity' => (int) $data['keep_quantity']],
+                            );
+                        }
+
+                        Notification::make()
+                            ->title('Minimo aggiornato')
+                            ->success()
+                            ->send();
+                    }),
                 Action::make('merge')
                     ->label('Unisci')
                     ->icon(Heroicon::ArrowsPointingIn)

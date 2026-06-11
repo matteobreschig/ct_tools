@@ -31,20 +31,24 @@ class ProductsTable
             ->columns([
                 ImageColumn::make('image_url')
                     ->label('')
-                    ->tooltip(function($state) {
+                    ->tooltip(function($record) {
+                        if(!$record->image_url_high) {
+                            return null;
+                        }
+
                         return new HtmlString("
                             <div style='padding:8px'>
                                 <img
-                                    src='{$state}/high.webp'
+                                    src='{$record->image_url_high}'
                                     style='max-width:300px; height:auto; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2);'
                                     loading='lazy'
                                 >
                             </div>
                         ");
                     })
-                    ->extraImgAttributes(function($state) {
+                    ->extraImgAttributes(function($record) {
                         return [
-                            'src' => $state . '/low.webp',
+                            'src' => $record->image_url_low,
                             'loading' => 'lazy',
                         ];
                     }),

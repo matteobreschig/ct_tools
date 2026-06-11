@@ -72,7 +72,14 @@ class SyncCardtraderBlueprints implements ShouldQueue, ShouldBeUnique
             ->distinct()
             ->pluck('blueprint_id');
 
-        foreach ($todo as $blueprintId) {
+        // Righe mappate prima dell'aggiunta della colonna immagine: le rifaccio
+        // una volta sola per recuperare anche quella. Escludo le righe d'errore
+        // (name null) e quelle già richieste ('' = blueprint senza immagine).
+        $legacy = CtBlueprint::whereNull('image_url')
+            ->whereNotNull('name')
+            ->pluck('blueprint_id');
+
+        foreach ($todo->merge($legacy)->unique() as $blueprintId) {
             // Cadenza ~7 req/s per restare sotto il cap globale (8/s) e colpire
             // solo il limite per-utente (100/60s), che gestisco con release.
             usleep(150000);
@@ -83,7 +90,7 @@ class SyncCardtraderBlueprints implements ShouldQueue, ShouldBeUnique
                 // Quota per-utente esaurita: riverso intanto quanto mappato e
                 // riprendo dai mancanti alla prossima esecuzione (il job non
                 // perde progresso, fa upsert man mano).
-                $this->backfillProductMetaNames();
+                $this->backfillProducts();
                 $this->release(random_int(60, 75));
 
                 return;
@@ -93,30 +100,46 @@ class SyncCardtraderBlueprints implements ShouldQueue, ShouldBeUnique
                 $blueprint = null;
             }
 
-            CtBlueprint::updateOrCreate(
-                ['blueprint_id' => $blueprintId],
-                [
-                    'meta_name' => $blueprint['meta_name'] ?? null,
-                    'name' => $blueprint['name'] ?? null,
-                ],
-            );
+            $row = CtBlueprint::firstOrNew(['blueprint_id' => $blueprintId]);
+
+            if ($blueprint !== null) {
+                $row->meta_name = $blueprint['meta_name'] ?? null;
+                $row->name = $blueprint['name'] ?? null;
+            }
+
+            // '' = richiesta fatta ma blueprint senza immagine: non riprovare.
+            $row->image_url = isset($blueprint['image']['url'])
+                ? 'https://www.cardtrader.com' . $blueprint['image']['url']
+                : '';
+
+            $row->save();
         }
 
-        $this->backfillProductMetaNames();
+        $this->backfillProducts();
     }
 
     /**
-     * Riversa i meta_name appena mappati sui prodotti che ne sono privi, così
-     * il raggruppamento compare senza aspettare la prossima sincronizzazione
-     * prodotti. Non tocca mai un meta_name già valorizzato: le unioni manuali
-     * sopravvivono.
+     * Riversa sui prodotti quanto appena mappato: i meta_name dove mancano
+     * (il raggruppamento compare senza aspettare la prossima sincronizzazione
+     * prodotti) e le immagini CardTrader dove TCGdex non ne ha fornita una.
+     * Non tocca mai valori già presenti: le unioni manuali sopravvivono.
      */
-    protected function backfillProductMetaNames(): void
+    protected function backfillProducts(): void
     {
         DB::table('products')
             ->join('ct_blueprints', 'ct_blueprints.blueprint_id', '=', 'products.blueprint_id')
             ->whereNull('products.meta_name')
             ->whereNotNull('ct_blueprints.meta_name')
             ->update(['products.meta_name' => DB::raw('ct_blueprints.meta_name')]);
+
+        DB::table('products')
+            ->join('ct_blueprints', 'ct_blueprints.blueprint_id', '=', 'products.blueprint_id')
+            ->whereNull('products.image_url')
+            ->where('ct_blueprints.image_url', '!=', '')
+            ->update(['products.image_url' => DB::raw('ct_blueprints.image_url')]);
+
+        // Coi meta_name appena arrivati le ristampe possono ereditare il tipo
+        // carta dalle versioni gemelle.
+        Product::backfillCardTypeFromSiblings();
     }
 }
