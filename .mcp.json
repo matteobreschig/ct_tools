@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "laravel-boost": {
+      "type": "stdio",
+      "command": "/Applications/MAMP/bin/php/php8.5.2/bin/php",
+      "args": [
+        "/Users/mbreschigliaro/Sites/ctalert/artisan",
+        "boost:mcp"
+      ],
+      "env": {}
+    }
+  }
+}

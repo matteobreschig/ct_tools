@@ -23,9 +23,15 @@ class ApplyDynamicSale implements ShouldQueue
 
     public int $timeout = 300;
 
-    public function __construct(public User $user)
-    {
-    }
+    /**
+     * Cache per esecuzione dei prezzi minimi di mercato Cardtrader,
+     * indicizzata per blueprint + condizione + lingua + reverse.
+     *
+     * @var array<string, float|null>
+     */
+    protected array $marketplacePrices = [];
+
+    public function __construct(public User $user) {}
 
     public function handle(): void
     {
@@ -47,10 +53,15 @@ class ApplyDynamicSale implements ShouldQueue
             ->get()
             ->each(function (CardGroup $group) use ($overrides, $client, &$ctData) {
                 // Tengo le copie più economiche e vendo prima quelle di maggior
-                // valore. Secondo criterio l'id, così l'ordine resta stabile a
-                // parità di prezzo.
+                // valore: prezzo Cardmarket, altrimenti quello dell'inserzione
+                // (MoneyCast salva i prezzi mancanti come 0, quindi lo zero va
+                // trattato come sconosciuto, mai come "carta che non vale nulla").
+                // Secondo criterio l'id, così l'ordine resta stabile a parità.
                 $products = $group->products()
-                    ->orderByRaw('COALESCE(cardmarket_price_low, price, 0)')
+                    ->orderByRaw('CASE
+                        WHEN cardmarket_price_low > 0 THEN cardmarket_price_low
+                        WHEN price > 0 THEN price
+                        ELSE 0 END')
                     ->orderBy('id')
                     ->get();
 
@@ -73,7 +84,7 @@ class ApplyDynamicSale implements ShouldQueue
                         // in vendita. Se la divisione non riesce la riga resta
                         // tutta ferma (mai sotto il minimo) e riprovo al giro dopo.
                         $excess = $kept - $keep;
-                        $salePrice = $product->price > 0 ? $product->price : $product->cardmarket_price_trend;
+                        $salePrice = $this->resolveSalePrice($client, $product);
 
                         if ($excess > 0 && $salePrice > 0) {
                             try {
@@ -85,14 +96,17 @@ class ApplyDynamicSale implements ShouldQueue
                         }
                     }
 
-                    // Senza un prezzo proprio pubblico al prezzo trend Cardmarket.
-                    if ($sell && $product->price <= 0 && $product->cardmarket_price_trend > 0) {
-                        $product->price = $product->cardmarket_price_trend;
-                    }
-
-                    // Senza prezzo né trend l'inserzione non è pubblicabile.
+                    // Senza un prezzo proprio pubblico al trend Cardmarket o,
+                    // in mancanza, al minimo del marketplace Cardtrader.
+                    // Senza nessuna fonte l'inserzione non è pubblicabile.
                     if ($sell && $product->price <= 0) {
-                        continue;
+                        $resolved = $this->resolveSalePrice($client, $product);
+
+                        if ($resolved === null) {
+                            continue;
+                        }
+
+                        $product->price = $resolved;
                     }
 
                     // Spingo anche le righe già in vendita a cui ho appena
@@ -117,6 +131,69 @@ class ApplyDynamicSale implements ShouldQueue
     }
 
     /**
+     * Prezzo a cui pubblicare il prodotto: il suo, altrimenti il trend
+     * Cardmarket, altrimenti il minimo del marketplace Cardtrader per la
+     * stessa carta in pari condizione, lingua e reverse (copre le stampe
+     * senza prezzi Cardmarket, come i Prize Pack). Null = nessuna fonte.
+     */
+    protected function resolveSalePrice(CTApiClient $client, Product $product): ?float
+    {
+        if ($product->price > 0) {
+            return $product->price;
+        }
+
+        if ($product->cardmarket_price_trend > 0) {
+            return $product->cardmarket_price_trend;
+        }
+
+        $cacheKey = implode(':', [
+            $product->blueprint_id,
+            $product->condition->value,
+            $product->language->value,
+            (int) $product->reverse,
+        ]);
+
+        if (array_key_exists($cacheKey, $this->marketplacePrices)) {
+            return $this->marketplacePrices[$cacheKey];
+        }
+
+        try {
+            $listings = $client->get('/marketplace/products', ['blueprint_id' => $product->blueprint_id])
+                ->json()[$product->blueprint_id] ?? [];
+        } catch (RequestException|ApiRateLimitException) {
+            // Niente cache sull'errore: ritento al prossimo giro.
+            return null;
+        }
+
+        $listings = collect($listings)
+            ->filter(fn (array $listing) => (bool) ($listing['properties_hash']['pokemon_reverse'] ?? false) === $product->reverse);
+
+        $sameCondition = fn (array $listing) => ($listing['properties_hash']['condition'] ?? null) === $product->condition->getApiLabel();
+        $language = fn (string $language) => fn (array $listing) => ($listing['properties_hash']['pokemon_language'] ?? null) === $language;
+
+        // Scala di ripieghi: stessa condizione e lingua, poi stessa condizione
+        // in inglese, poi stessa condizione in qualunque lingua, infine
+        // qualunque inserzione (sempre a pari reverse, i prezzi differiscono).
+        $levels = [
+            $listings->filter($sameCondition)->filter($language($product->language->value)),
+            $listings->filter($sameCondition)->filter($language('en')),
+            $listings->filter($sameCondition),
+            $listings,
+        ];
+
+        $cents = null;
+        foreach ($levels as $level) {
+            $cents = $level->min(fn (array $listing) => $listing['price']['cents'] ?? null);
+
+            if ($cents > 0) {
+                break;
+            }
+        }
+
+        return $this->marketplacePrices[$cacheKey] = $cents > 0 ? round($cents / 100, 2) : null;
+    }
+
+    /**
      * Divide un'inserzione di confine: riduce quella esistente alle copie da
      * tenere (al prezzo di disattivazione, anche per evitare che Cardtrader
      * fonda le due inserzioni) e pubblica l'eccedenza come nuova inserzione.
@@ -125,7 +202,7 @@ class ApplyDynamicSale implements ShouldQueue
     {
         // Prima la riduzione: se la creazione poi fallisce restano copie non
         // pubblicate, mai copie offerte due volte.
-        $client->put('/products/' . $product->product_id, [
+        $client->put('/products/'.$product->product_id, [
             'quantity' => $product->quantity - $excess,
             'price' => config('app.ct_disable_price'),
         ]);
