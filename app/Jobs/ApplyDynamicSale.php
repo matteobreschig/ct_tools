@@ -8,6 +8,7 @@ use App\Models\CardGroupSetting;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\CTApiClient;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Http\Client\RequestException;
@@ -17,11 +18,24 @@ use Illuminate\Http\Client\RequestException;
  * richieste (deroga del gruppo o minimo globale dell'utente) e mette in
  * vendita il resto, spingendo i prezzi a Cardtrader in un'unica chiamata.
  */
-class ApplyDynamicSale implements ShouldQueue
+class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
     public int $timeout = 300;
+
+    /**
+     * Una sola istanza per utente in coda o in esecuzione: il job è lanciato
+     * da più punti (fine sincronizzazione, pulsante "Applica adesso") e crea
+     * inserzioni su Cardtrader, quindi due copie concorrenti le duplicherebbero.
+     * Finestra allineata al timeout, oltre il lock si libera comunque.
+     */
+    public int $uniqueFor = 300;
+
+    public function uniqueId(): string
+    {
+        return (string) $this->user->id;
+    }
 
     /**
      * Cache per esecuzione dei prezzi minimi di mercato Cardtrader,

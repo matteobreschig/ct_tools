@@ -29,6 +29,10 @@ services:
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis
       REDIS_HOST: redis
+      # Deve superare il timeout del job più lungo (SyncProducts: 900s),
+      # altrimenti la coda rilascia job ancora in corso e li riesegue in
+      # parallelo (inserzioni Cardtrader duplicate).
+      REDIS_QUEUE_RETRY_AFTER: "1200"
 
       # Custom
       CT_DISABLE_PRICE: "${CT_DISABLE_PRICE}"
