@@ -5,6 +5,7 @@ namespace App\Filament\Resources\CardGroups\RelationManagers;
 use App\Services\CTApiClient;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Icons\Heroicon;
@@ -52,6 +53,16 @@ class VersionsRelationManager extends RelationManager
                 IconColumn::make('sale')
                     ->label('In vendita')
                     ->boolean()
+                    ->sortable(),
+                IconColumn::make('sale_locked')
+                    ->label('Bloccato')
+                    ->boolean()
+                    ->trueIcon(Heroicon::LockClosed)
+                    ->falseIcon(Heroicon::LockOpen)
+                    ->color(fn (bool $state): string => $state ? 'warning' : 'gray')
+                    ->tooltip(fn (bool $state): string => $state
+                        ? 'Stato vendita bloccato: la vendita dinamica non lo tocca'
+                        : 'Gestito dalla vendita dinamica')
                     ->sortable(),
                 TextColumn::make('expansion.name')
                     ->label('Espansione')
@@ -114,12 +125,17 @@ class VersionsRelationManager extends RelationManager
                                     'set_on_sale' => Heroicon::HandThumbUp,
                                     'set_off_sale' => Heroicon::HandThumbDown,
                                 ]),
+                            Toggle::make('lock')
+                                ->label('Blocca dalla vendita dinamica')
+                                ->helperText('Lo stato impostato non verrà più modificato dal job automatico. Disattiva per restituire le carte alla gestione automatica.')
+                                ->default(true),
                         ])
                         ->action(function (array $data, Collection $records) {
                             $ctData = ['products' => []];
 
                             $records->each(function ($model) use ($data, &$ctData) {
                                 $model->sale = $data['sale_status'] == 'set_on_sale';
+                                $model->sale_locked = $data['lock'];
                                 $model->save();
 
                                 $ctData['products'][] = [

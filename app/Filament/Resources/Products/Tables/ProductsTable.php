@@ -8,16 +8,15 @@ use App\Enums\RegulationMark;
 use App\Services\CTApiClient;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\HtmlString;
@@ -31,8 +30,8 @@ class ProductsTable
             ->columns([
                 ImageColumn::make('image_url')
                     ->label('')
-                    ->tooltip(function($record) {
-                        if(!$record->image_url_high) {
+                    ->tooltip(function ($record) {
+                        if (! $record->image_url_high) {
                             return null;
                         }
 
@@ -46,7 +45,7 @@ class ProductsTable
                             </div>
                         ");
                     })
-                    ->extraImgAttributes(function($record) {
+                    ->extraImgAttributes(function ($record) {
                         return [
                             'src' => $record->image_url_low,
                             'loading' => 'lazy',
@@ -56,6 +55,17 @@ class ProductsTable
                     ->label('In vendita')
                     ->sortable()
                     ->boolean()
+                    ->toggleable(),
+                IconColumn::make('sale_locked')
+                    ->label('Bloccato')
+                    ->sortable()
+                    ->boolean()
+                    ->trueIcon(Heroicon::LockClosed)
+                    ->falseIcon(Heroicon::LockOpen)
+                    ->color(fn (bool $state): string => $state ? 'warning' : 'gray')
+                    ->tooltip(fn (bool $state): string => $state
+                        ? 'Stato vendita bloccato: la vendita dinamica non lo tocca'
+                        : 'Gestito dalla vendita dinamica')
                     ->toggleable(),
                 TextColumn::make('name')
                     ->label('Nome')
@@ -82,7 +92,7 @@ class ProductsTable
                     ->suffix('€')
                     ->sortable()
                     ->toggleable(),
-/*                TextColumn::make('category.name')
+                /*                TextColumn::make('category.name')
                     ->label('Categoria')
                     ->searchable()
                     ->sortable()
@@ -264,7 +274,9 @@ class ProductsTable
                 TernaryFilter::make('first_edition')
                     ->label('Prima edizione'),
                 TernaryFilter::make('sale')
-                    ->label('In vendita')
+                    ->label('In vendita'),
+                TernaryFilter::make('sale_locked')
+                    ->label('Bloccato'),
             ])
             ->recordActions([])
             ->toolbarActions([
@@ -285,13 +297,18 @@ class ProductsTable
                                 ->icons([
                                     'set_on_sale' => Heroicon::HandThumbUp,
                                     'set_off_sale' => Heroicon::HandThumbDown,
-                                ])
+                                ]),
+                            Toggle::make('lock')
+                                ->label('Blocca dalla vendita dinamica')
+                                ->helperText('Lo stato impostato non verrà più modificato dal job automatico. Disattiva per restituire le carte alla gestione automatica.')
+                                ->default(true),
                         ])
                         ->action(function (array $data, Collection $records) {
                             $ctData = ['products' => []];
 
                             $records->each(function ($model) use ($data, &$ctData) {
                                 $model->sale = $data['sale_status'] == 'set_on_sale';
+                                $model->sale_locked = $data['lock'];
                                 $model->save();
 
                                 $ctData['products'][] = [

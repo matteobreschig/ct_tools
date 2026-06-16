@@ -88,6 +88,13 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
 
                 $kept = 0;
                 foreach ($products as $product) {
+                    // Blocco manuale: lo stato di vendita resta quello impostato
+                    // a mano. Fuori dal conteggio del minimo: le copie automatiche
+                    // si gestiscono a parte, le bloccate sono "extra".
+                    if ($product->sale_locked) {
+                        continue;
+                    }
+
                     $sell = $kept >= $keep;
 
                     if (! $sell) {

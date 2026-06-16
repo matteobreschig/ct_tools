@@ -23,6 +23,7 @@ class Product extends Model
         'quantity',
         'price',
         'sale',
+        'sale_locked',
         'blueprint_id',
         'cardmarket_product_id',
         'meta_name',
@@ -59,6 +60,7 @@ class Product extends Model
         return [
             'price' => MoneyCast::class,
             'sale' => 'boolean',
+            'sale_locked' => 'boolean',
             'tournament_legal' => 'boolean',
             'tournament_extended_legal' => 'boolean',
             'reverse' => 'boolean',
@@ -80,7 +82,7 @@ class Product extends Model
     public static function booted(): void
     {
         static::creating(function (Product $item) {
-            if (!$item->user_id) {
+            if (! $item->user_id) {
                 $item->user_id = auth()->id();
             }
         });
