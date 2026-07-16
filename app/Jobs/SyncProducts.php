@@ -18,6 +18,7 @@ class SyncProducts implements ShouldQueue
     use Queueable;
 
     public int $timeout = 900;
+
     public int $tries = 1;
 
     public $user;
@@ -36,15 +37,15 @@ class SyncProducts implements ShouldQueue
     public function handle(): void
     {
         try {
-            $tcgdexEn = new TCGdex("en");
-            $tcgdexIt = new TCGdex("it");
+            $tcgdexEn = new TCGdex('en');
+            $tcgdexIt = new TCGdex('it');
             $client = new CTApiClient($this->user);
 
             $categoriesData = $client->get('/categories')->json();
-            foreach($categoriesData as $categoryData) {
+            foreach ($categoriesData as $categoryData) {
                 Category::updateOrCreate(
                     [
-                        'ct_id' => $categoryData['id']
+                        'ct_id' => $categoryData['id'],
                     ],
                     [
                         'name' => $categoryData['name'],
@@ -54,14 +55,16 @@ class SyncProducts implements ShouldQueue
 
             $expansionsData = $client->get('/expansions')->json();
             $tcgDexEnSets = $tcgdexEn->set->list();
-            foreach($expansionsData as $expansionData) {
-                //Al momento CT non filtra per game_id quindi faccio un controllo anche qui
-                if($expansionData['game_id'] != '5') continue;
+            foreach ($expansionsData as $expansionData) {
+                // Al momento CT non filtra per game_id quindi faccio un controllo anche qui
+                if ($expansionData['game_id'] != '5') {
+                    continue;
+                }
 
                 $tcgDexSet = null;
-                foreach($tcgDexEnSets as $tcgDexEnExpansion) {
-                    if($tcgDexEnExpansion->name == $expansionData['name']) {
-                        if(!$tcgDexSet = $tcgdexIt->set->get($tcgDexEnExpansion->id)) {
+                foreach ($tcgDexEnSets as $tcgDexEnExpansion) {
+                    if ($tcgDexEnExpansion->name == $expansionData['name']) {
+                        if (! $tcgDexSet = $tcgdexIt->set->get($tcgDexEnExpansion->id)) {
                             $tcgDexSet = $tcgdexEn->set->get($tcgDexEnExpansion->id);
                         }
                         break;
@@ -70,7 +73,7 @@ class SyncProducts implements ShouldQueue
 
                 Expansion::updateOrCreate(
                     [
-                        'ct_id' => $expansionData['id']
+                        'ct_id' => $expansionData['id'],
                     ],
                     [
                         'code' => $expansionData['code'],
@@ -100,7 +103,7 @@ class SyncProducts implements ShouldQueue
             $italianNamesByMeta = [];
             $pendingTranslation = [];
 
-            foreach($productsData as $productData) {
+            foreach ($productsData as $productData) {
                 $product = Product::firstOrNew([
                     'product_id' => $productData['id'],
                     'user_id' => $this->user->id,
@@ -112,7 +115,7 @@ class SyncProducts implements ShouldQueue
                 $tcgdexProduct = null;
                 $italianMatch = false;
                 $tcgdexCode = $expansionsTcgdex[$productData['expansion']['id']] ?? null;
-                if($tcgdexCode) {
+                if ($tcgdexCode) {
                     // Provo più varianti del numero di collezione: quello originale con
                     // eventuali lettere (promo tipo "TG12" o "SWSH123"), quello numerico
                     // e quello con riempimento a 3 cifre.
@@ -122,18 +125,34 @@ class SyncProducts implements ShouldQueue
                         str_pad($collectorNumber, 3, '0', STR_PAD_LEFT),
                     ], fn ($number) => $number !== '')));
 
-                    foreach($numberCandidates as $numberCandidate) {
-                        if($tcgdexProduct = $tcgdexIt->card->get($tcgdexCode . '-' . $numberCandidate)) {
+                    foreach ($numberCandidates as $numberCandidate) {
+                        if ($tcgdexProduct = $tcgdexIt->card->get($tcgdexCode.'-'.$numberCandidate)) {
                             $italianMatch = true;
                             break;
                         }
                     }
 
-                    if(!$tcgdexProduct) {
-                        foreach($numberCandidates as $numberCandidate) {
-                            if($tcgdexProduct = $tcgdexEn->card->get($tcgdexCode . '-' . $numberCandidate)) {
+                    if (! $tcgdexProduct) {
+                        foreach ($numberCandidates as $numberCandidate) {
+                            if ($tcgdexProduct = $tcgdexEn->card->get($tcgdexCode.'-'.$numberCandidate)) {
                                 break;
                             }
+                        }
+                    }
+
+                    // Il match per numero può agganciare la carta sbagliata quando
+                    // le numerazioni non coincidono: le energie base dentro il set
+                    // base (es. "Basic Lightning Energy 004/198" di Scarlatto e
+                    // Violetto) su TCGdex trovano al numero 4 un Pokémon qualsiasi.
+                    // Se una sola delle due fonti è un'energia il match è errato:
+                    // meglio nessun dato TCGdex che i dati di un'altra carta.
+                    if ($tcgdexProduct) {
+                        $ctIsEnergy = (bool) preg_match('/\bEnergy$/i', trim((string) $productData['name_en']));
+                        $tcgdexIsEnergy = in_array($tcgdexProduct->category, ['Energia', 'Energy'], true);
+
+                        if ($ctIsEnergy !== $tcgdexIsEnergy) {
+                            $tcgdexProduct = null;
+                            $italianMatch = false;
                         }
                     }
                 }
@@ -188,7 +207,7 @@ class SyncProducts implements ShouldQueue
 
                 if ($productData['price_cents'] < config('app.ct_disable_price') * 100) {
                     $product->price = $productData['price_cents'] / 100;
-                } elseif (!$product->exists) {
+                } elseif (! $product->exists) {
                     // Prodotto nuovo già al prezzo di disattivazione su Cardtrader:
                     // lo registro direttamente come non in vendita.
                     $product->sale = false;
@@ -209,7 +228,7 @@ class SyncProducts implements ShouldQueue
             }
 
             foreach ($pendingTranslation as $metaName => $products) {
-                if (!isset($italianNamesByMeta[$metaName])) {
+                if (! isset($italianNamesByMeta[$metaName])) {
                     continue;
                 }
 
@@ -249,8 +268,7 @@ class SyncProducts implements ShouldQueue
                 ->title('Sincronizzazione completata con successo')
                 ->success()
                 ->sendToDatabase($this->user);
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             Notification::make()
                 ->title('Sincronizzazione completata con successo')
                 ->body($e->getMessage())
