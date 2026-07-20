@@ -130,12 +130,6 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
                         $product->price = $resolved;
                     }
 
-                    // Spingo anche le righe già in vendita a cui ho appena
-                    // assegnato il prezzo trend.
-                    if ($product->sale === $sell && ! $product->isDirty('price')) {
-                        continue;
-                    }
-
                     $product->sale = $sell;
                     $product->save();
 
