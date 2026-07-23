@@ -213,6 +213,12 @@ class SyncProducts implements ShouldQueue
                     $product->sale = false;
                 }
 
+                // Prodotto nuovo già col tag vacanza su Cardtrader: fermo anche
+                // se il prezzo è sotto la soglia di disattivazione.
+                if (! $product->exists && ($productData['tag'] ?? null) === config('app.ct_vacation_tag')) {
+                    $product->sale = false;
+                }
+
                 $product->save();
 
                 // Memorizzo il nome italiano per gruppo di ristampe e segno i prodotti

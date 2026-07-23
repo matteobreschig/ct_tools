@@ -133,9 +133,13 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
                     $product->sale = $sell;
                     $product->save();
 
+                    // Oltre al prezzo di disattivazione, il tag vacanza: con la
+                    // modalità vacanza per tag attiva su Cardtrader le inserzioni
+                    // ferme spariscono dagli acquisti restando nel magazzino.
                     $ctData['products'][] = [
                         'id' => $product->product_id,
                         'price' => $sell ? $product->price : config('app.ct_disable_price'),
+                        'tag' => $sell ? null : config('app.ct_vacation_tag'),
                     ];
                 }
             });
@@ -220,6 +224,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
         $client->put('/products/'.$product->product_id, [
             'quantity' => $product->quantity - $excess,
             'price' => config('app.ct_disable_price'),
+            'tag' => config('app.ct_vacation_tag'),
         ]);
 
         $created = $client->post('/products', [

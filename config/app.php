@@ -124,4 +124,6 @@ return [
     ],
 
     'ct_disable_price' => env('CT_DISABLE_PRICE', 99999),
+
+    'ct_vacation_tag' => env('CT_VACATION_TAG', 'fermo'),
 ];

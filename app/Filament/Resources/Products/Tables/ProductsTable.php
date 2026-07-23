@@ -314,6 +314,7 @@ class ProductsTable
                                 $ctData['products'][] = [
                                     'id' => $model->product_id,
                                     'price' => $data['sale_status'] == 'set_on_sale' ? $model->price : config('app.ct_disable_price'),
+                                    'tag' => $data['sale_status'] == 'set_on_sale' ? null : config('app.ct_vacation_tag'),
                                 ];
                             });
 
