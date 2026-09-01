@@ -12,7 +12,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("CREATE OR REPLACE VIEW card_groups AS
+        $this->replaceCardGroupsView("CREATE OR REPLACE VIEW card_groups AS
             SELECT
                 CONCAT(
                     CASE WHEN p.cardmarket_metacard_id IS NOT NULL THEN 'm:' ELSE 'b:' END,
@@ -41,7 +41,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement('CREATE OR REPLACE VIEW card_groups AS
+        $this->replaceCardGroupsView('CREATE OR REPLACE VIEW card_groups AS
             SELECT
                 p.user_id,
                 p.cardmarket_metacard_id,
@@ -54,5 +54,20 @@ return new class extends Migration
             FROM products p
             WHERE p.cardmarket_metacard_id IS NOT NULL
             GROUP BY p.user_id, p.cardmarket_metacard_id');
+    }
+
+    /**
+     * La vista card_groups usa sintassi MySQL (CREATE OR REPLACE, CONCAT,
+     * COLLATE) che gli altri driver rifiutano. Sul SQLite dei test la vista
+     * non serve, quindi si salta: in produzione gira MySQL e il comportamento
+     * resta identico.
+     */
+    private function replaceCardGroupsView(string $sql): void
+    {
+        if (! in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
+        DB::statement($sql);
     }
 };

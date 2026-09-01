@@ -34,6 +34,15 @@ services:
       # parallelo (inserzioni Cardtrader duplicate).
       REDIS_QUEUE_RETRY_AFTER: "1200"
 
+      # Monitor Amazon
+      # Entrambi hanno un default nel codice (60 e 300 secondi): si passano qui
+      # solo per poterli cambiare senza ricostruire l'immagine. Il minimo è un
+      # tetto globale, l'IP è condiviso da tutti i prodotti monitorati.
+      AMAZON_MONITOR_MIN_INTERVAL: "${AMAZON_MONITOR_MIN_INTERVAL:-60}"
+      AMAZON_MONITOR_DEFAULT_INTERVAL: "${AMAZON_MONITOR_DEFAULT_INTERVAL:-300}"
+      AMAZON_MONITOR_PRUNE_DAYS: "${AMAZON_MONITOR_PRUNE_DAYS:-30}"
+      AMAZON_MONITOR_PROXY: "${AMAZON_MONITOR_PROXY:-}"
+
       # Custom
       CT_DISABLE_PRICE: "${CT_DISABLE_PRICE}"
 

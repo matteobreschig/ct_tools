@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "343d93acb7621292409555553846b171",
+    "content-hash": "271527fb9b57685952f6c7d9c7dc5970",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -6815,20 +6815,20 @@
         },
         {
             "name": "symfony/css-selector",
-            "version": "v8.0.6",
+            "version": "v8.1.6",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/css-selector.git",
-                "reference": "2a178bf80f05dbbe469a337730eba79d61315262"
+                "reference": "08e2905152a39cf3fd1745d83f8c483e258887d9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/css-selector/zipball/2a178bf80f05dbbe469a337730eba79d61315262",
-                "reference": "2a178bf80f05dbbe469a337730eba79d61315262",
+                "url": "https://api.github.com/repos/symfony/css-selector/zipball/08e2905152a39cf3fd1745d83f8c483e258887d9",
+                "reference": "08e2905152a39cf3fd1745d83f8c483e258887d9",
                 "shasum": ""
             },
             "require": {
-                "php": ">=8.4"
+                "php": ">=8.4.1"
             },
             "type": "library",
             "autoload": {
@@ -6860,7 +6860,7 @@
             "description": "Converts CSS selectors to XPath expressions",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/css-selector/tree/v8.0.6"
+                "source": "https://github.com/symfony/css-selector/tree/v8.1.6"
             },
             "funding": [
                 {
@@ -6880,7 +6880,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-02-17T13:07:04+00:00"
+            "time": "2026-08-23T10:06:25+00:00"
         },
         {
             "name": "symfony/deprecation-contracts",
@@ -6948,6 +6948,76 @@
                 }
             ],
             "time": "2024-09-25T14:21:43+00:00"
+        },
+        {
+            "name": "symfony/dom-crawler",
+            "version": "v8.1.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/dom-crawler.git",
+                "reference": "94f70e1b2e5b7b8f8618871fd9eaad3e39e9f03d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/dom-crawler/zipball/94f70e1b2e5b7b8f8618871fd9eaad3e39e9f03d",
+                "reference": "94f70e1b2e5b7b8f8618871fd9eaad3e39e9f03d",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.4.1",
+                "symfony/polyfill-ctype": "^1.8",
+                "symfony/polyfill-mbstring": "^1.0"
+            },
+            "require-dev": {
+                "symfony/css-selector": "^7.4|^8.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\Component\\DomCrawler\\": ""
+                },
+                "exclude-from-classmap": [
+                    "/Tests/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Fabien Potencier",
+                    "email": "fabien@symfony.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "Eases DOM navigation for HTML and XML documents",
+            "homepage": "https://symfony.com",
+            "support": {
+                "source": "https://github.com/symfony/dom-crawler/tree/v8.1.5"
+            },
+            "funding": [
+                {
+                    "url": "https://symfony.com/sponsor",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/fabpot",
+                    "type": "github"
+                },
+                {
+                    "url": "https://github.com/nicolas-grekas",
+                    "type": "github"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
+                    "type": "tidelift"
+                }
+            ],
+            "time": "2026-08-21T17:47:34+00:00"
         },
         {
             "name": "symfony/error-handler",
@@ -11663,6 +11733,72 @@
                 }
             ],
             "time": "2026-02-21T00:29:45+00:00"
+        },
+        {
+            "name": "pestphp/pest-plugin-livewire",
+            "version": "v4.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/pestphp/pest-plugin-livewire.git",
+                "reference": "0b5a137ec6ceadd19dd2c59b9b60039d64f6b4d2"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/pestphp/pest-plugin-livewire/zipball/0b5a137ec6ceadd19dd2c59b9b60039d64f6b4d2",
+                "reference": "0b5a137ec6ceadd19dd2c59b9b60039d64f6b4d2",
+                "shasum": ""
+            },
+            "require": {
+                "livewire/livewire": "^3.7.4|^4.0.1",
+                "pestphp/pest": "^4.3.1",
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "orchestra/testbench": "^10.9.0",
+                "pestphp/pest-dev-tools": "^4.0.0"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/Autoload.php"
+                ],
+                "psr-4": {
+                    "Pest\\Livewire\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "The Pest Livewire Plugin",
+            "keywords": [
+                "framework",
+                "livewire",
+                "pest",
+                "php",
+                "plugin",
+                "test",
+                "testing",
+                "unit"
+            ],
+            "support": {
+                "source": "https://github.com/pestphp/pest-plugin-livewire/tree/v4.1.0"
+            },
+            "funding": [
+                {
+                    "url": "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=66BYDWAT92N6L",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/nunomaduro",
+                    "type": "github"
+                },
+                {
+                    "url": "https://www.patreon.com/nunomaduro",
+                    "type": "patreon"
+                }
+            ],
+            "time": "2026-01-16T00:56:22+00:00"
         },
         {
             "name": "pestphp/pest-plugin-mutate",

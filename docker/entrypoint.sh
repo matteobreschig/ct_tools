@@ -46,5 +46,13 @@ php artisan filament:optimize
 php artisan horizon &
 php artisan schedule:work &
 
+# Monitor Amazon: processo long-running, lo scheduler ha granularità di un
+# minuto e non basta per intervalli di pochi secondi. Il comando esce da solo
+# dopo un'ora per non accumulare memoria, il ciclo lo rilancia.
+while true; do
+    php artisan amazon:monitor-loop --max-runtime=3600
+    sleep 2
+done &
+
 echo "Starting Apache..."
 exec apache2-foreground
