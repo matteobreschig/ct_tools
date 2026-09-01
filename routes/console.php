@@ -1,13 +1,20 @@
 <?php
 
+use App\Jobs\DispatchUpdates;
+use App\Jobs\SyncCardtraderBlueprints;
 use Illuminate\Console\Scheduling\Schedule;
 
 app(Schedule::class)
-    ->job(new \App\Jobs\DispatchUpdates())
+    ->job(new DispatchUpdates)
     ->hourly()
     ->withoutOverlapping();
 
 app(Schedule::class)
-    ->job(new \App\Jobs\SyncCardtraderBlueprints())
+    ->job(new SyncCardtraderBlueprints)
+    ->daily()
+    ->withoutOverlapping();
+
+app(Schedule::class)
+    ->command('amazon:prune-checks')
     ->daily()
     ->withoutOverlapping();
