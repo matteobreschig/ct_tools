@@ -15,6 +15,12 @@ return new class extends Migration
     {
         Schema::dropIfExists('cardmarket_products');
 
+        // L'indice va rimosso prima della colonna: MySQL lo fa da sé, SQLite
+        // no e si ferma con "error in index ... after drop column".
+        Schema::table('products', function (Blueprint $table) {
+            $table->dropIndex(['cardmarket_metacard_id']);
+        });
+
         Schema::table('products', function (Blueprint $table) {
             $table->dropColumn('cardmarket_metacard_id');
         });
