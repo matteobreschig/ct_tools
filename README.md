@@ -1,61 +1,119 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CT Alert
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Applicazione Laravel per monitorare prezzi e disponibilità di carte Pokémon e prodotti Amazon, con notifiche in tempo reale su Telegram e un pannello di gestione Filament.
 
-## About Laravel
+## Cosa fa
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Monitoraggio carte Cardtrader.** Sincronizza i blueprint dal marketplace Cardtrader (gioco Pokémon) e invia un alert quando il prezzo di una carta tracciata scende sotto la soglia impostata.
+- **Repricing dinamico.** Aggiorna in automatico il prezzo delle proprie inserzioni Cardtrader e applica ribassi programmati.
+- **Monitoraggio Amazon.** Controlla a intervalli regolari le pagine prodotto Amazon per intercettare cambi di disponibilità e di prezzo, con un tetto di frequenza globale che protegge dall'essere bloccati.
+- **Notifiche Telegram.** Ogni evento rilevante raggiunge l'utente tramite un bot Telegram.
+- **Pannello Filament.** Gestione di carte tracciate, prodotti, monitoraggi Amazon, gruppi di carte e utenti da un'unica interfaccia amministrativa.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Stack tecnico
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Ambito | Tecnologia |
+| --- | --- |
+| Linguaggio | PHP 8.4 |
+| Framework | Laravel 12 |
+| Pannello admin | Filament 5 |
+| Interfaccia reattiva | Livewire 4 |
+| Code e worker | Laravel Horizon (Redis) |
+| Dati carte | tcgdex SDK |
+| Notifiche | Telegram |
+| Test | Pest 4 |
+| Stili | Tailwind CSS 4 |
+| Database | MariaDB |
 
-## Learning Laravel
+## Requisiti
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- PHP 8.4 con le estensioni `dom` e `pdo`
+- Composer
+- Node.js e npm
+- MariaDB (o MySQL)
+- Redis, consigliato per le code tramite Horizon
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## Installazione
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```bash
+git clone <url-del-repository> ctalert
+cd ctalert
 
-## Laravel Sponsors
+composer install
+npm install
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+cp .env.example .env
+php artisan key:generate
+```
 
-### Premium Partners
+Configura le credenziali del database nel file `.env`, poi crea lo schema:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+```bash
+php artisan migrate
+```
 
-## Contributing
+Compila gli asset e avvia l'ambiente di sviluppo:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+npm run dev
+php artisan serve
+```
 
-## Code of Conduct
+In alternativa `composer run dev` avvia insieme server, code, log e Vite.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Variabili d'ambiente principali
 
-## Security Vulnerabilities
+Oltre alla configurazione standard di Laravel, l'applicazione usa:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+| Variabile | Descrizione |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Token del bot Telegram per le notifiche |
+| `CT_DISABLE_PRICE` | Prezzo sentinella usato per disattivare un'inserzione Cardtrader |
+| `AMAZON_MONITOR_MIN_INTERVAL` | Intervallo minimo di polling in secondi, tetto di sicurezza condiviso da tutti i monitoraggi |
+| `AMAZON_MONITOR_DEFAULT_INTERVAL` | Intervallo proposto sui nuovi monitoraggi |
+| `AMAZON_MONITOR_PRUNE_DAYS` | Giorni di storico dei controlli da conservare |
+| `AMAZON_MONITOR_PROXY` | Proxy opzionale per le richieste verso Amazon |
 
-## License
+## Attività pianificate
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Lo scheduler di Laravel coordina i lavori ricorrenti:
+
+- controllo orario dei prezzi dei blueprint tracciati e invio degli alert;
+- sincronizzazione giornaliera dei blueprint da Cardtrader;
+- pulizia giornaliera dello storico dei controlli Amazon.
+
+Il monitoraggio Amazon gira come processo continuo tramite il comando `php artisan amazon:monitor-loop`, mentre le code sono gestite da Horizon.
+
+Per attivare lo scheduler in produzione basta un cron ogni minuto:
+
+```bash
+* * * * * cd /percorso/ctalert && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Docker
+
+Il repository include un `Dockerfile` e un `docker-compose.yml` per avviare l'applicazione in container.
+
+```bash
+docker compose up -d
+```
+
+## Test
+
+La suite è scritta con Pest:
+
+```bash
+php artisan test
+```
+
+## Qualità del codice
+
+Prima di aprire una pull request formatta il codice con Pint:
+
+```bash
+vendor/bin/pint
+```
+
+## Licenza
+
+Distribuito con licenza MIT. I dettagli sono nel file [LICENSE](LICENSE).
