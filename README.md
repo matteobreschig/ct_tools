@@ -1,14 +1,13 @@
 # CT Alert
 
-Applicazione Laravel per monitorare prezzi e disponibilità di carte Pokémon e prodotti Amazon, con notifiche in tempo reale su Telegram e un pannello di gestione Filament.
+Applicazione Laravel per monitorare prezzi e disponibilità di carte Pokémon, con notifiche in tempo reale su Telegram e un pannello di gestione Filament.
 
 ## Cosa fa
 
 - **Monitoraggio carte Cardtrader.** Sincronizza i blueprint dal marketplace Cardtrader (gioco Pokémon) e invia un alert quando il prezzo di una carta tracciata scende sotto la soglia impostata.
 - **Repricing dinamico.** Aggiorna in automatico il prezzo delle proprie inserzioni Cardtrader e applica ribassi programmati.
-- **Monitoraggio Amazon.** Controlla a intervalli regolari le pagine prodotto Amazon per intercettare cambi di disponibilità e di prezzo, con un tetto di frequenza globale che protegge dall'essere bloccati.
 - **Notifiche Telegram.** Ogni evento rilevante raggiunge l'utente tramite un bot Telegram.
-- **Pannello Filament.** Gestione di carte tracciate, prodotti, monitoraggi Amazon, gruppi di carte e utenti da un'unica interfaccia amministrativa.
+- **Pannello Filament.** Gestione di carte tracciate, prodotti, gruppi di carte e utenti da un'unica interfaccia amministrativa.
 
 ## Stack tecnico
 
@@ -69,20 +68,15 @@ Oltre alla configurazione standard di Laravel, l'applicazione usa:
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Token del bot Telegram per le notifiche |
 | `CT_DISABLE_PRICE` | Prezzo sentinella usato per disattivare un'inserzione Cardtrader |
-| `AMAZON_MONITOR_MIN_INTERVAL` | Intervallo minimo di polling in secondi, tetto di sicurezza condiviso da tutti i monitoraggi |
-| `AMAZON_MONITOR_DEFAULT_INTERVAL` | Intervallo proposto sui nuovi monitoraggi |
-| `AMAZON_MONITOR_PRUNE_DAYS` | Giorni di storico dei controlli da conservare |
-| `AMAZON_MONITOR_PROXY` | Proxy opzionale per le richieste verso Amazon |
 
 ## Attività pianificate
 
 Lo scheduler di Laravel coordina i lavori ricorrenti:
 
 - controllo orario dei prezzi dei blueprint tracciati e invio degli alert;
-- sincronizzazione giornaliera dei blueprint da Cardtrader;
-- pulizia giornaliera dello storico dei controlli Amazon.
+- sincronizzazione giornaliera dei blueprint da Cardtrader.
 
-Il monitoraggio Amazon gira come processo continuo tramite il comando `php artisan amazon:monitor-loop`, mentre le code sono gestite da Horizon.
+Le code sono gestite da Laravel Horizon.
 
 Per attivare lo scheduler in produzione basta un cron ogni minuto:
 
