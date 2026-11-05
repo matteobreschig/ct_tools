@@ -13,8 +13,3 @@ app(Schedule::class)
     ->job(new SyncCardtraderBlueprints)
     ->daily()
     ->withoutOverlapping();
-
-app(Schedule::class)
-    ->command('amazon:prune-checks')
-    ->daily()
-    ->withoutOverlapping();
