@@ -32,6 +32,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('')
             ->login()
+            ->brandName('CT Tools')
             ->colors([
                 'primary' => Color::Amber,
             ])
