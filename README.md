@@ -122,6 +122,10 @@ Prima di aprire una pull request formatta il codice con Pint:
 vendor/bin/pint
 ```
 
+## Sviluppo con assistenza AI
+
+Parte del codice di questo progetto è stata scritta con l'assistenza di modelli AI (Claude di Anthropic). Ogni contributo generato è stato rivisto, testato e validato prima di entrare nel repository.
+
 ## Licenza
 
 Distribuito con licenza MIT. I dettagli sono nel file [LICENSE](LICENSE).
