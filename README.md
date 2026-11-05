@@ -1,4 +1,4 @@
-# CT Alert
+# CT Tools
 
 Applicazione Laravel per monitorare prezzi e disponibilità di carte Pokémon, con notifiche in tempo reale su Telegram e un pannello di gestione Filament.
 
@@ -8,6 +8,20 @@ Applicazione Laravel per monitorare prezzi e disponibilità di carte Pokémon, c
 - **Repricing dinamico.** Aggiorna in automatico il prezzo delle proprie inserzioni Cardtrader e applica ribassi programmati.
 - **Notifiche Telegram.** Ogni evento rilevante raggiunge l'utente tramite un bot Telegram.
 - **Pannello Filament.** Gestione di carte tracciate, prodotti, gruppi di carte e utenti da un'unica interfaccia amministrativa.
+
+## Screenshot
+
+Catalogo delle carte con miniature, versioni e prezzo di mercato più basso:
+
+![Catalogo carte](docs/screenshots/carte.jpg)
+
+Elenco dei prodotti con stato di vendita e prezzo:
+
+![Prodotti](docs/screenshots/prodotti.jpg)
+
+Carte tracciate con prezzo obiettivo per gli alert:
+
+![Prodotti tracciati](docs/screenshots/prodotti-tracciati.jpg)
 
 ## Stack tecnico
 
