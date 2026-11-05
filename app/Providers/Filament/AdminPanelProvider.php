@@ -5,7 +5,6 @@ namespace App\Providers\Filament;
 use App\Livewire\MyProfileCtApiKey;
 use App\Livewire\MyProfileDynamicSale;
 use App\Livewire\MyProfileTelegram;
-use App\Livewire\MyProfileGCalendar;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
