@@ -387,6 +387,22 @@ gemelli (stesse cifre del numero, stesso nome) vince quello con la variante dell
 Pokecardex, nei due versi. Un blueprint senza gemelli resta valido qualunque sia la sua etichetta.
 Restano blueprint unici "Non-Holo / Cosmos Holo": lì le due versioni Pokecardex si sommano.
 
+**Cosmos come reverse** (2026-11-12). Per le Energy Prize Pack CardTrader registra le Cosmos in due
+modi: un blueprint dedicato "Reverse Cosmos Holo | MEE 001" (Energy MEE) oppure lo stesso blueprint
+della Non Holo con `pokemon_reverse` (Energy 2024 #009…#016, Jet Energy, Counter Catcher). Una
+versione Pokecardex Cosmos va quindi sul gemello Cosmos dedicato se c'è, altrimenti sullo stesso
+blueprint; ed è reverse ovunque tranne sul blueprint "Cosmos Holo" puro (come Levincia).
+
+**Espansioni miste** (Theme Deck Exclusives, Prize Pack): nelle regole il ripiego sul numero usa
+solo le cifre (`189nh` = `189/198`) e, se trova più blueprint, il nome normalizzato. Un ID
+Cardmarket che porta a numero e nome diversi non viene creduto (Lunatone 74 di Pokecardex ha il
+codice Cardmarket di Latios 101). Regole aggiunte in sviluppo: versioni "Non Holo" (48) e "Cosmos
+Holo" (39) di 13 serie → `deckexclusives`; SVE 39 → `sveen`.
+
+**Serie ignorate** (`pokecardex_series.ignored`, dalla pagina Serie): per le serie che non esistono
+su CardTrader (Topps, decisione dell'utente). Le loro righe restano fuori dal confronto e dalle
+revisioni; contano solo nel totale copie per i freni.
+
 Regole e abbinamenti salvati nel database di sviluppo il 2026-11-12 (da rifare in produzione,
 dalla pagina "Serie Pokecardex"): PRZP → `playprizep` con 144, 147, 149 → `playprizep`; SVE →
 `sveen`; SVP → `svpromo`; PRWC → `wiz`; SK → `skg` (il codice `SK` coincide con `sk`, Premium
