@@ -316,3 +316,58 @@ it('removes from CardTrader a card that is known and absent on Pokecardex', func
     expect($change->direction)->toBe(PokecardexSyncDirection::ToCardTrader)
         ->and($change->quantityAfter())->toBe(0);
 });
+
+function froslassChanges(SyncPlan $plan): array
+{
+    return collect($plan->changes)
+        ->map(fn ($change) => $change->direction->value.':'.$change->state->key->condition->value.':'.$change->quantityBefore().'>'.$change->quantityAfter())
+        ->sort()
+        ->values()
+        ->all();
+}
+
+it('keeps the CardTrader condition when only the condition differs on the first run', function () {
+    froslassListing(1, ['condition' => 'sp']);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
+
+    expect(froslassChanges($plan))->toBe(['to_pokecardex:nm:1>0', 'to_pokecardex:sp:0>1']);
+    $added = collect($plan->changes)->first(fn ($change) => $change->quantityAfter() > $change->quantityBefore());
+    expect($added->target)->toBe(['id_card' => 26600, 'id_version' => 1]);
+});
+
+it('takes quantities from Pokecardex and conditions from CardTrader on the first run', function () {
+    froslassListing(2, ['condition' => 'mp']);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 2, 1]]));
+
+    expect(froslassChanges($plan))->toBe(['to_cardtrader:mp:2>1', 'to_pokecardex:mp:0>1', 'to_pokecardex:sp:1>0']);
+});
+
+it('adds the extra Pokecardex copies in their own condition on the first run', function () {
+    froslassListing(1, ['condition' => 'sp']);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 3]]));
+
+    expect(froslassChanges($plan))->toBe(['to_cardtrader:nm:0>2', 'to_pokecardex:nm:3>2', 'to_pokecardex:sp:0>1']);
+});
+
+it('trusts a language already in the collection even if the catalog does not list it', function () {
+    $this->card->update(['versions' => [['id_version' => 1, 'nom_version_us' => 'Standard', 'langues' => [2]]]]);
+    froslassListing(1, ['condition' => 'sp']);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
+
+    expect(froslassChanges($plan))->toBe(['to_pokecardex:nm:1>0', 'to_pokecardex:sp:0>1']);
+});
+
+it('drops all writes of a card when one of them cannot be done', function () {
+    froslassListing(1, ['condition' => 'sp']);
+
+    // La riga Excellent si toglierebbe, ma la nuova riga SP non si può aggiungere
+    // perché la carta ha una riga da rivedere (versione speciale senza regola).
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1], [102, 197, 6, 1, 2]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and(collect($plan->reviews)->pluck('kind')->sort()->values()->all())->toBe(['quarantine', 'unmatched']);
+});

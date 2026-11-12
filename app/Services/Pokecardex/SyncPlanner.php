@@ -2,6 +2,7 @@
 
 namespace App\Services\Pokecardex;
 
+use App\Enums\ConditionType;
 use App\Enums\PokecardexMatchStatus;
 use App\Enums\PokecardexSyncDirection;
 use App\Models\Expansion;
@@ -23,11 +24,13 @@ use Illuminate\Support\Collection;
  * | P = base, C ≠ base         | C su Pokecardex           |
  * | P ≠ base, C ≠ base, P ≠ C  | conflitto                 |
  *
- * Al primo giro (nessuna base) ogni differenza propone il valore di Pokecardex
- * (decisione dell'utente, 2026-11-12: le carte si inseriscono su Pokecardex e
- * le differenze sono copie mai portate su CardTrader) e passa dall'anteprima.
- * Fanno eccezione le copie già vendute su CardTrader: fino alla differenza si
- * tolgono da Pokecardex invece di essere reinserite su CardTrader.
+ * Il primo giro (nessuna base) passa dall'anteprima e ragiona per carta
+ * (stesso blueprint, lingua, reverse e prima edizione), con le decisioni
+ * dell'utente del 2026-11-12:
+ * - le quantità le decide Pokecardex, dove le carte si inseriscono, tolte le
+ *   copie già vendute su CardTrader (al massimo la differenza);
+ * - le condizioni le decide CardTrader, quella che vede chi compra; le copie
+ *   in più di Pokecardex tengono la loro condizione.
  */
 final class SyncPlanner
 {
@@ -45,6 +48,14 @@ final class SyncPlanner
      */
     private array $quarantinedCards = [];
 
+    /**
+     * Carta, versione e lingua già presenti nella collezione Pokecardex: esistono
+     * anche quando il catalogo Pokecardex non elenca quella lingua.
+     *
+     * @var array<string, true>
+     */
+    private array $ownedLanguages = [];
+
     public function __construct(private CardMatcher $matcher) {}
 
     /**
@@ -58,6 +69,7 @@ final class SyncPlanner
         $this->quarantinedCards = [];
 
         $rows = collect($collection['collection'])->map(fn (array $row): PokecardexRow => PokecardexRow::fromArray($row));
+        $this->ownedLanguages = $rows->mapWithKeys(fn (PokecardexRow $row): array => ["{$row->idCard}|{$row->idVersion}|{$row->idLangue}" => true])->all();
         $pokecardexKeys = $this->pokecardexKeys($rows);
 
         $products = Product::query()->where('user_id', $user->id)->whereNotNull('blueprint_id')->get();
@@ -80,44 +92,55 @@ final class SyncPlanner
             ->sort()
             ->values();
 
-        foreach ($keyIds as $keyId) {
-            $key = $pokecardexKeys[$keyId]['key'] ?? $cardtraderKeys[$keyId]['key'] ?? $bases->get($keyId)->key();
-            $state = new KeyState(
-                $key,
-                pokecardex: array_sum(array_map(fn (PokecardexRow $row): int => $row->quantity, $pokecardexKeys[$keyId]['rows'] ?? [])),
-                cardtrader: (int) collect($cardtraderKeys[$keyId]['products'] ?? [])->sum('quantity'),
-                base: $bases->get($keyId)?->quantity,
-                rows: $pokecardexKeys[$keyId]['rows'] ?? [],
-                products: $cardtraderKeys[$keyId]['products'] ?? [],
-            );
+        $states = $keyIds->map(fn (string $keyId): KeyState => new KeyState(
+            $pokecardexKeys[$keyId]['key'] ?? $cardtraderKeys[$keyId]['key'] ?? $bases->get($keyId)->key(),
+            pokecardex: array_sum(array_map(fn (PokecardexRow $row): int => $row->quantity, $pokecardexKeys[$keyId]['rows'] ?? [])),
+            cardtrader: (int) collect($cardtraderKeys[$keyId]['products'] ?? [])->sum('quantity'),
+            base: $bases->get($keyId)?->quantity,
+            rows: $pokecardexKeys[$keyId]['rows'] ?? [],
+            products: $cardtraderKeys[$keyId]['products'] ?? [],
+        ));
 
-            if ($state->pokecardex === $state->cardtrader) {
-                $agreed[] = $state;
+        if ($firstRun) {
+            $states
+                ->groupBy(fn (KeyState $state): string => $this->variantId($state->key))
+                ->each(function (Collection $variant) use (&$changes, &$agreed, $sales): void {
+                    [$variantChanges, $variantAgreed] = $this->firstRunVariant($variant->values(), $sales);
+                    array_push($agreed, ...$variantAgreed);
 
-                continue;
-            }
+                    // Le scritture di una carta vanno insieme: togliere la riga
+                    // nella condizione vecchia senza aggiungere quella nuova
+                    // perderebbe copie.
+                    $prepared = array_filter(array_map(fn (KeyChange $change): ?KeyChange => $this->prepare($change), $variantChanges));
 
-            if ($firstRun && $state->pokecardex > $state->cardtrader && isset($sales[$keyId])) {
-                array_push($changes, ...$this->firstRunWithSales($state, $sales[$keyId]));
+                    if (count($prepared) === count($variantChanges)) {
+                        array_push($changes, ...$prepared);
+                    }
+                });
+        } else {
+            foreach ($states as $state) {
+                if ($state->pokecardex === $state->cardtrader) {
+                    $agreed[] = $state;
 
-                continue;
-            }
+                    continue;
+                }
 
-            $direction = $this->direction($state, $firstRun);
+                $direction = $this->direction($state);
 
-            if ($direction === null) {
-                $conflicts[] = $state;
-                $this->reviews[] = new ReviewItem('conflict', 'Modificata su entrambi i lati in modo diverso.', [
-                    'key' => $key->attributes(), 'pokecardex' => $state->pokecardex, 'cardtrader' => $state->cardtrader, 'base' => $state->base,
-                ]);
+                if ($direction === null) {
+                    $conflicts[] = $state;
+                    $this->reviews[] = new ReviewItem('conflict', 'Modificata su entrambi i lati in modo diverso.', [
+                        'key' => $state->key->attributes(), 'pokecardex' => $state->pokecardex, 'cardtrader' => $state->cardtrader, 'base' => $state->base,
+                    ]);
 
-                continue;
-            }
+                    continue;
+                }
 
-            $change = $this->prepare(new KeyChange($state, $direction));
+                $change = $this->prepare(new KeyChange($state, $direction));
 
-            if ($change !== null) {
-                $changes[] = $change;
+                if ($change !== null) {
+                    $changes[] = $change;
+                }
             }
         }
 
@@ -134,34 +157,106 @@ final class SyncPlanner
     }
 
     /**
-     * Primo giro, più copie su Pokecardex che su CardTrader, e vendite
-     * CardTrader per la chiave: le copie vendute (al massimo la differenza)
-     * si tolgono da Pokecardex, il resto si aggiunge su CardTrader.
+     * Primo giro per una carta: quantità da Pokecardex (tolte le vendute),
+     * condizioni da CardTrader.
      *
-     * @param  list<array{quantity: int, paid_at: string, order: string}>  $sales
-     * @return list<KeyChange>
+     * Totale concordato T = copie Pokecardex − copie vendute su CardTrader (al
+     * massimo la differenza). Si parte dalle condizioni di CardTrader: se T è
+     * minore si tolgono prima le copie che Pokecardex non ha in quella
+     * condizione, dalla peggiore; se T è maggiore le copie in più prendono le
+     * condizioni che Pokecardex ha in eccesso, dalla migliore.
+     *
+     * @param  Collection<int, KeyState>  $variant
+     * @param  array<string, list<array{quantity: int, paid_at: string, order: string}>>  $sales
+     * @return array{0: list<KeyChange>, 1: list<KeyState>}
      */
-    private function firstRunWithSales(KeyState $state, array $sales): array
+    private function firstRunVariant(Collection $variant, array $sales): array
     {
-        $difference = $state->pokecardex - $state->cardtrader;
-        $sold = min($difference, array_sum(array_column($sales, 'quantity')));
-        $agreed = $state->pokecardex - $sold;
-
-        $changes = [new KeyChange($state, PokecardexSyncDirection::ToPokecardex, quantity: $agreed, sales: $sales)];
-
-        if ($agreed > $state->cardtrader) {
-            $changes[] = new KeyChange($state, PokecardexSyncDirection::ToCardTrader, quantity: $agreed);
+        if ($variant->every(fn (KeyState $state): bool => $state->pokecardex === $state->cardtrader)) {
+            return [[], $variant->all()];
         }
 
-        return $changes;
+        $pokecardexTotal = $variant->sum('pokecardex');
+        $cardtraderTotal = $variant->sum('cardtrader');
+        $variantSales = $variant->flatMap(fn (KeyState $state): array => $sales[$state->key->id()] ?? [])->sortByDesc('paid_at')->values()->all();
+        $sold = $pokecardexTotal > $cardtraderTotal
+            ? min($pokecardexTotal - $cardtraderTotal, array_sum(array_column($variantSales, 'quantity')))
+            : 0;
+        $total = $pokecardexTotal - $sold;
+
+        // Dalla condizione migliore (NM) alla peggiore (PO).
+        $order = array_flip(array_map(fn (ConditionType $condition): string => $condition->value, ConditionType::cases()));
+        $variant = $variant->sortBy(fn (KeyState $state): int => $order[$state->key->condition->value])->values();
+        $target = $variant->mapWithKeys(fn (KeyState $state): array => [$state->key->id() => $state->cardtrader])->all();
+
+        if ($total < $cardtraderTotal) {
+            $toRemove = $cardtraderTotal - $total;
+            $removalOrder = $variant->reverse()->sortBy(fn (KeyState $state): int => $state->cardtrader > $state->pokecardex ? 0 : 1, SORT_REGULAR)->values();
+
+            foreach ($removalOrder as $state) {
+                $taken = min($target[$state->key->id()], $toRemove);
+                $target[$state->key->id()] -= $taken;
+                $toRemove -= $taken;
+            }
+        } else {
+            $toAdd = $total - $cardtraderTotal;
+
+            foreach ($variant as $state) {
+                $added = min(max(0, $state->pokecardex - $state->cardtrader), $toAdd);
+                $target[$state->key->id()] += $added;
+                $toAdd -= $added;
+            }
+        }
+
+        $variantTarget = $this->variantTarget($variant);
+        $changes = [];
+        $agreed = [];
+
+        foreach ($variant as $state) {
+            $quantity = $target[$state->key->id()];
+
+            if ($state->pokecardex === $quantity && $state->cardtrader === $quantity) {
+                $agreed[] = $state;
+
+                continue;
+            }
+
+            if ($state->pokecardex !== $quantity) {
+                $change = new KeyChange($state, PokecardexSyncDirection::ToPokecardex, quantity: $quantity, sales: $quantity < $state->pokecardex ? $variantSales : []);
+                $changes[] = $state->rows === [] && $variantTarget !== null ? $change->withTarget($variantTarget) : $change;
+            }
+
+            if ($state->cardtrader !== $quantity) {
+                $changes[] = new KeyChange($state, PokecardexSyncDirection::ToCardTrader, quantity: $quantity);
+            }
+        }
+
+        return [$changes, $agreed];
     }
 
-    private function direction(KeyState $state, bool $firstRun): ?PokecardexSyncDirection
+    /**
+     * Carta e versione Pokecardex della carta, se tutte le sue righe concordano.
+     *
+     * @param  Collection<int, KeyState>  $variant
+     * @return array{id_card: int, id_version: int}|null
+     */
+    private function variantTarget(Collection $variant): ?array
     {
-        if ($firstRun) {
-            return PokecardexSyncDirection::ToCardTrader;
-        }
+        $targets = $variant
+            ->flatMap(fn (KeyState $state): array => $state->rows)
+            ->map(fn (PokecardexRow $row): array => ['id_card' => $row->idCard, 'id_version' => $row->idVersion])
+            ->unique(fn (array $target): string => $target['id_card'].'|'.$target['id_version']);
 
+        return $targets->count() === 1 ? $targets->first() : null;
+    }
+
+    private function variantId(CardKey $key): string
+    {
+        return implode('|', [$key->blueprintId, $key->language->value, (int) $key->reverse, (int) $key->firstEdition]);
+    }
+
+    private function direction(KeyState $state): ?PokecardexSyncDirection
+    {
         $base = $state->base ?? 0;
 
         return match (true) {
@@ -214,7 +309,7 @@ final class SyncPlanner
             return $change;
         }
 
-        $target = $this->target($state, 'non so dove aggiungerla su Pokecardex');
+        $target = $change->target ?? $this->target($state, 'non so dove aggiungerla su Pokecardex');
 
         if ($target === null) {
             return null;
@@ -229,7 +324,9 @@ final class SyncPlanner
         $idLangue = Translator::languageToPokecardex($state->key->language);
         $languages = PokecardexCard::find($target['id_card'])?->languagesOf($target['id_version']);
 
-        if ($idLangue === null || ($languages !== null && ! in_array($idLangue, $languages, true))) {
+        $owned = isset($this->ownedLanguages["{$target['id_card']}|{$target['id_version']}|{$idLangue}"]);
+
+        if ($idLangue === null || (! $owned && $languages !== null && ! in_array($idLangue, $languages, true))) {
             $this->reviews[] = new ReviewItem('language', "La carta Pokecardex non esiste in lingua {$state->key->language->value}.", $payload + $target);
 
             return null;
