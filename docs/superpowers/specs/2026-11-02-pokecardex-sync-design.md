@@ -279,6 +279,31 @@ senza corrispondenza, 26 in quarantena; 121 in attesa (quasi tutte Delta Reign).
   dalle altre. Una riga che arriva a zero si cancella.
 - Ritmo: al massimo una chiamata al secondo.
 
+### 4.5 Come è fatto il giro (2026-11-12)
+
+`App\Jobs\SyncPokecardex`, un giro alla volta per utente (`ShouldBeUnique`):
+1. rilegge le inserzioni CardTrader (`CardTraderInventory`, cioè `SyncProducts::sync()` senza
+   accodare la vendita dinamica); `SyncProducts` ora lancia le eccezioni invece di ingoiarle quando
+   è chiamato così;
+2. aggiorna l'elenco serie se ha più di un giorno, legge la collezione Pokecardex, al primo giro lo
+   storico vendite;
+3. piano (§ 4.2.1) e freni (§ 7); il giro salva in `pokecardex_sync_runs` il piano (`plan`) e la
+   sua impronta (`fingerprint`);
+4. freno di blocco → `blocked`; anteprima → `preview`. L'anteprima approvata si applica rilanciando
+   il giro con l'id della run approvata: le scritture partono solo se il nuovo piano ha la stessa
+   impronta, altrimenti nuova anteprima;
+5. scritture (`SyncApplier`): per carta, prima gli aumenti e poi le diminuzioni, così un errore
+   lascia al massimo copie in più; al primo errore il giro si ferma (`failed`); la base cambia solo
+   per le carte scritte per intero;
+6. dopo scritture su CardTrader rilegge le inserzioni e accoda `ApplyDynamicSale`;
+7. notifica nel pannello per ogni esito.
+
+Scrittori: `CardTraderWriter` (aumento sull'inserzione ferma o nuova inserzione ferma con prezzo di
+disattivazione e tag vacanza; diminuzione prima dalle inserzioni in vendita; inserzione a zero
+cancellata con `DELETE /products/{id}`, **chiamata non ancora provata dal vivo**) e
+`PokecardexWriter` (aumento sulla riga con la stessa traduzione o riga nuova; diminuzione dalla
+riga più recente).
+
 ## 5. Traduzioni
 
 ### 5.1 Condizioni
@@ -417,7 +442,7 @@ giro il pannello ritenta l'abbinamento; quando riesce, la carta segue il percors
 
 Fatti il 2026-11-12 (`SyncSafety`): soglia copie e soglia rimozioni in `config/services.php`
 (`POKECARDEX_MIN_COPIES_RATIO`, `POKECARDEX_MAX_REMOVED_COPIES`), confronto con l'ultimo giro
-`applied` in `pokecardex_sync_runs`. Il lock per utente arriva col giro vero (passo 6).
+`applied` in `pokecardex_sync_runs`. Lock per utente: `ShouldBeUnique` sul job del giro (§ 4.5).
 
 ## 8. Interfaccia
 
@@ -476,7 +501,7 @@ del § 4.2 sia per utente e per chiave carta.
 3. Client Pokecardex (login, sessione, chiave, lettura, scrittura) con test su risposte registrate.
 4. Catalogo Pokecardex su richiesta, traduzioni e abbinamenti (§ 5) (fatto il 2026-11-12).
 5. Confronto a tre e freni (§ 4, § 7), con test (fatto il 2026-11-12, § 4.2.1).
-6. Scritture su CardTrader e Pokecardex.
+6. Scritture su CardTrader e Pokecardex (fatto il 2026-11-12, § 4.5).
 7. Interfaccia (§ 8) con il bottone "Sincronizza ora".
 8. Primo allineamento reale con anteprima.
 
