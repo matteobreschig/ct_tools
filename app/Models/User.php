@@ -4,15 +4,17 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\Roles;
+use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable implements FilamentUser
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     /**
@@ -81,9 +83,17 @@ class User extends Authenticatable implements FilamentUser
         return true;
     }
 
+    /**
+     * @return HasOne<PokecardexAccount, $this>
+     */
+    public function pokecardexAccount(): HasOne
+    {
+        return $this->hasOne(PokecardexAccount::class);
+    }
+
     public function hasCtApiKey(): bool
     {
-        return !empty($this->ct_api_key);
+        return ! empty($this->ct_api_key);
     }
 
     public function isAdmin(): bool

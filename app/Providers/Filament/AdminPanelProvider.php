@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Livewire\MyProfileCtApiKey;
 use App\Livewire\MyProfileDynamicSale;
+use App\Livewire\MyProfilePokecardex;
 use App\Livewire\MyProfileTelegram;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -49,7 +50,7 @@ class AdminPanelProvider extends PanelProvider
                         userMenuLabel: 'Mio profilo',
                         navigationGroup: 'Settings',
                     )
-                    ->myProfileComponents([MyProfileCtApiKey::class, MyProfileTelegram::class, MyProfileDynamicSale::class]),
+                    ->myProfileComponents([MyProfileCtApiKey::class, MyProfileTelegram::class, MyProfileDynamicSale::class, MyProfilePokecardex::class]),
             ])
             ->widgets([
                 AccountWidget::class,
