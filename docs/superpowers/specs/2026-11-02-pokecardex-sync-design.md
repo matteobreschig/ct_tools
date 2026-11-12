@@ -377,6 +377,16 @@ per ID Cardmarket finiva sulla carta di `asc` con il flag reverse: il piano avre
 precedenza su qualunque versione, Standard esclusa; creare o cambiare una regola cancella gli
 abbinamenti automatici di quella versione.
 
+**Varianti dichiarate da CardTrader** (2026-11-12). Nelle Prize Pack CardTrader ha spesso due
+blueprint per la stessa carta, con ID Cardmarket diversi e la variante nel campo `version`
+("Non-Holo | 150/159", "Cosmos Holo | 150/159"; i numeri possono essere `150nh` e `150h`), mentre
+Pokecardex ha una carta sola, con le versioni 144 e 147 e un ID Cardmarket solo. Senza tenerne
+conto le Cosmos finivano sul blueprint Non Holo (114 copie in più proposte su inserzioni esistenti).
+Ora `ct_expansion_blueprints.version` viene salvato e, dentro un'espansione di regola, tra blueprint
+gemelli (stesse cifre del numero, stesso nome) vince quello con la variante della versione
+Pokecardex, nei due versi. Un blueprint senza gemelli resta valido qualunque sia la sua etichetta.
+Restano blueprint unici "Non-Holo / Cosmos Holo": lì le due versioni Pokecardex si sommano.
+
 Regole e abbinamenti salvati nel database di sviluppo il 2026-11-12 (da rifare in produzione,
 dalla pagina "Serie Pokecardex"): PRZP → `playprizep` con 144, 147, 149 → `playprizep`; SVE →
 `sveen`; SVP → `svpromo`; PRWC → `wiz`; SK → `skg` (il codice `SK` coincide con `sk`, Premium
