@@ -226,13 +226,15 @@ completa.
 
 ### 5.2 Lingue
 
-| `id_langue` | 4 | 2 | 5 | 1 | 3 | 6 | 7 | 8 | 12 |
-|---|---|---|---|---|---|---|---|---|---|
-| Pokecardex | italiano | inglese | giapponese | francese | tedesco | spagnolo | portoghese | coreano | cinese s. |
-| `Language` | it | en | jp | fr | de | es | pt | — | — |
+Codici letti da `series` il 2026-11-12:
 
-Coreano e cinese non esistono nell'enum `Language`: queste righe restano "solo Pokecardex" e
-compaiono in "Da rivedere" una volta sola, senza scritture.
+| `id_langue` | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 9 | 10 | 11 | 8, 12, 13, 14, 15 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Pokecardex | francese | inglese | tedesco | italiano | giapponese | spagnolo | portoghese | olandese | russo | polacco | coreano, cinese s., thai, cinese t., indonesiano |
+| `Language` | fr | en | de | it | jp | es | pt | nl | ru | pl | — |
+
+Le lingue senza corrispondenza su CardTrader restano "solo Pokecardex" e compaiono in "Da
+rivedere" una volta sola, senza scritture. Lo svedese di CardTrader non esiste su Pokecardex.
 
 ### 5.3 Versioni
 
@@ -254,30 +256,62 @@ Forma delle regole per le versioni speciali (scelta mia):
 
 ### 5.4 Dalla carta Pokecardex al blueprint
 
-In ordine:
+Fatto il 2026-11-12 (`App\Services\Pokecardex\CardMatcher`). `ct_blueprints` **non** contiene gli
+ID Cardmarket (colonna vuota su tutte le righe) e le sue righe guidano il recupero dei
+`meta_name`, quindi gli abbinamenti usano una tabella propria, `ct_expansion_blueprints`, riempita
+da `/blueprints/export?expansion_id=` (`BlueprintCatalog`), una volta al giorno al massimo per
+espansione e solo quando serve.
 
-1. `id_cardmarket` → `ct_blueprints.cardmarket_product_id`. Se il risultato è uno solo, sicuro.
-2. Se non è in `ct_blueprints`: export dei blueprint dell'espansione CardTrader corrispondente
-   (`/blueprints/export?expansion_id=`), cerca in `card_market_ids`, salva in `ct_blueprints`.
-3. Abbinamento salvato a mano dall'utente (§ 8.2).
-4. Niente: la riga resta **in attesa** (§ 6).
+Versioni sicure (1, 2, 6), in ordine:
+1. abbinamento manuale salvato: vince sempre;
+2. la serie deve avere un'espansione CardTrader, altrimenti "Da rivedere";
+3. `id_cardmarket` → `ct_expansion_blueprints.cardmarket_product_id`: un solo blueprint e stesso
+   numero di collezione → sicuro, salvato in `pokecardex_card_matches`; più blueprint o numero
+   diverso → "Da rivedere"; nessuno → **in attesa**.
 
-Corrispondenza tra serie Pokecardex ed espansione CardTrader (scelta mia): la tabella
-`expansions` non ha l'ID Cardmarket, quindi l'abbinamento automatico confronta `nom_us` con
-`expansions.name_en` / `name` (esempio: "Delta Reign") e `nom_court` con `expansions.code` senza
-distinzione tra maiuscole e minuscole. Se trova esattamente un'espansione la salva; altrimenti la
-serie si abbina a mano nella revisione. Serve al passo 2, alle regole di serie (§ 5.3) e al
-ritentativo automatico delle carte in attesa.
+Versioni speciali: regola di serie (`pokecardex_series_rules`) → espansione CardTrader; dentro
+quell'espansione prima per ID Cardmarket, poi per numero di collezione. Un solo risultato → sicuro.
+Il primo criterio serve alle espansioni miste come Prize Pack, dove lo stesso numero compare più
+volte. Il flag reverse di una versione speciale si ricava dal nome ("Reverse (...)"): le
+inserzioni CardTrader di `p-asc`, `e-asc`, `p-wht` sono tutte reverse.
 
-Dal blueprint alla carta Pokecardex (verso opposto): il pannello tiene il **catalogo completo** di
-Pokecardex (decisione dell'utente: una carta presente solo su CardTrader va aggiunta anche su
-Pokecardex). `get_all_collection` restituisce solo le carte possedute, quindi il pannello tiene
-un catalogo in `pokecardex_cards`. Senza giri programmati (§ 1.1) il catalogo si carica su
-richiesta, dentro il giro manuale: solo le serie che servono (quelle delle carte presenti solo su
-CardTrader), con `get_cartes`, una chiamata al secondo, più `lang=jp` per le giapponesi. Una serie
-già in catalogo si riscarica solo se ha più di un giorno. Da lì il verso
-opposto usa lo stesso abbinamento per ID Cardmarket: blueprint → `cardmarket_product_id` →
-`id_card`. Un prodotto CardTrader che non trova nessuna carta nel catalogo va in revisione una volta.
+Verso opposto (blueprint → carta Pokecardex): abbinamento salvato compatibile con reverse e prima
+edizione; altrimenti, se l'espansione è destinazione di regole, carte delle serie delle regole
+(ID Cardmarket, poi numero); altrimenti carte delle serie abbinate all'espansione per ID
+Cardmarket, con la versione 1, 2 o 6 secondo le proprietà dell'inserzione. Versione assente sulla
+carta → "Da rivedere".
+
+Corrispondenza serie ↔ espansione (`PokecardexCatalog::linkExpansions`): codice (`nom_court` =
+`code`) o nome inglese uguale, senza distinguere maiuscole, solo se il risultato è uno; le serie
+abbinate a mano (`expansion_source = manual`) non si toccano.
+
+Catalogo Pokecardex (`pokecardex_series`, `pokecardex_cards`): le serie da `series`, le carte da
+`get_all_collection` (quelle possedute) e da `get_cartes` per serie (le altre), caricate su
+richiesta dentro il giro manuale e riscaricate solo dopo un giorno. Il catalogo è condiviso tra
+gli utenti, come regole e abbinamenti.
+
+**Export non pronto.** Per alcune espansioni `/blueprints/export` risponde 404 "Data is not ready"
+e lo resta per minuti (visto su Prize Pack Series Two…Eight): le carte coinvolte restano in attesa
+e si riprova al giro dopo.
+
+**Prova sulla collezione reale (2026-11-12, 6153 copie):**
+- serie abbinate da sole: 141 su 251; 50 delle 59 serie possedute;
+- abbinate in sicurezza: 4876 copie (79%);
+- versioni speciali senza regola: 793 copie, soprattutto Prize Pack (versioni 144 "Non Holo
+  (PPS)" e 147 "Cosmos Holo (PPS)", 666 copie). Con la regola PRZP → `playprizep` 219 righe PRZP su
+  225 trovano un blueprint unico per ID Cardmarket;
+- serie senza espansione: 409 copie. Delta Reign (252) perché `dlr` non è ancora nella tabella
+  `expansions` (arriva col prossimo `SyncProducts`); Scarlet & Violet Energy (`sveen`), SV Promos
+  (`svpromo`), Wizards Promos (`wiz`), Prize Pack (`playprizep`) vanno abbinate a mano;
+- numero diverso: 72 copie. Quasi tutte suffissi CardTrader delle varianti (`180nh`, `031h`,
+  `104e`) o prefissi Pokecardex (`MEE001`); due errori veri (Lunatone abbinata a Latios, Mr. Mime
+  95a a 95b). Restano "Da rivedere": togliere i suffissi in automatico rischierebbe di confondere
+  holo e non holo (§ 1.3);
+- in attesa: 3 copie.
+
+Aperto: due versioni Pokecardex della stessa carta Prize Pack (144 e 147) hanno lo stesso ID
+Cardmarket e finiscono sullo stesso blueprint. Nel verso opposto il blueprint non sa quale delle
+due scegliere e va in revisione. Da decidere col confronto a tre (§ 4).
 
 ## 6. Sicuro, da rivedere, in attesa
 
@@ -341,12 +375,13 @@ al modulo. Non c'è interruttore di sincronizzazione automatica: la sincronizzaz
 ```
 pokecardex_accounts          user_id, username, password (encrypted), session_cookies (encrypted, json),
                              decrypt_key (nullable), last_run_at, blocked_reason (nullable)
-pokecardex_series            id_serie (PK), lang (en|jp), code, name_us, id_cardmarket, expansion_id (nullable)
+pokecardex_series            id_serie (PK), lang (en|jp), code, name_us, id_cardmarket, expansion_id (nullable),
+                             expansion_source (auto|manual), cards_loaded_at
+ct_expansion_blueprints      blueprint_id (PK), expansion_ct_id, name, collector_number, cardmarket_product_id(s)
 pokecardex_cards             id_card (PK), id_serie, num_card, name_en, id_cardmarket, versions (json)
                              (catalogo caricato per serie su richiesta, § 5.4)
-pokecardex_series_rules      user_id, id_serie, id_version → ct expansion_id (regole di serie, § 5.3)
-pokecardex_card_matches      user_id?, id_card, id_version → blueprint_id, reverse, first_edition,
-                             source (cardmarket|export|manual)
+pokecardex_series_rules      id_serie, id_version → expansion_id (regole di serie, § 5.3, condivise)
+pokecardex_card_matches      id_card, id_version → blueprint_id, source (cardmarket|rule|manual)
 pokecardex_sync_states       user_id, blueprint_id, condition, language, reverse, first_edition,
                              quantity (la base concordata)
 pokecardex_review_items      user_id, kind, payload (json), status (open|resolved|ignored)
@@ -367,7 +402,7 @@ del § 4.2 sia per utente e per chiave carta.
    aggiunta, una modifica di quantità e una cancellazione su una carta di prova, per avere nomi
    e parametri esatti delle azioni (§ 2.2). Annullare subito dopo.
 3. Client Pokecardex (login, sessione, chiave, lettura, scrittura) con test su risposte registrate.
-4. Catalogo Pokecardex su richiesta, traduzioni e abbinamenti (§ 5).
+4. Catalogo Pokecardex su richiesta, traduzioni e abbinamenti (§ 5) (fatto il 2026-11-12).
 5. Confronto a tre e freni (§ 4, § 7), con test.
 6. Scritture su CardTrader e Pokecardex.
 7. Interfaccia (§ 8) con il bottone "Sincronizza ora".
