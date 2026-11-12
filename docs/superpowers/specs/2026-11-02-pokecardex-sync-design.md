@@ -461,6 +461,16 @@ Fatti il 2026-11-12 (`SyncSafety`): soglia copie e soglia rimozioni in `config/s
 - **In attesa**: elenco informativo, raggruppato per espansione.
 - **Storico**: cosa ha scritto ogni giro, con direzione, carta, quantità, esito, errore.
 
+**Fatto il 2026-11-12** (`App\Filament\Pages\Pokecardex`, gruppo di navigazione "Pokecardex"):
+stato dell'ultimo giro (si aggiorna da solo mentre il giro è in corso), bottoni "Sincronizza ora",
+"Applica anteprima" e "Scarta anteprima", tabella del piano dell'ultimo giro con le sezioni
+Scritture, Da rivedere e In attesa (filtro "Lato" per le scritture), storico degli ultimi dieci
+giri. Risorsa "Serie Pokecardex": abbinamento a mano di una serie a un'espansione CardTrader e
+regole delle versioni speciali; cambiare o togliere una regola cancella gli abbinamenti nati da
+lei. **Non ancora fatti:** invertire il verso di una scrittura nell'anteprima, scegliere a mano il
+blueprint di una carta, scegliere il lato in un conflitto, ignorare per sempre una revisione. Il
+giro gira in coda: serve un worker attivo (`php artisan queue:work` o Horizon).
+
 ### 8.2 Profilo
 
 Componente `MyProfilePokecardex` accanto agli altri (fatto): username e password, salvati per
@@ -502,7 +512,7 @@ del § 4.2 sia per utente e per chiave carta.
 4. Catalogo Pokecardex su richiesta, traduzioni e abbinamenti (§ 5) (fatto il 2026-11-12).
 5. Confronto a tre e freni (§ 4, § 7), con test (fatto il 2026-11-12, § 4.2.1).
 6. Scritture su CardTrader e Pokecardex (fatto il 2026-11-12, § 4.5).
-7. Interfaccia (§ 8) con il bottone "Sincronizza ora".
+7. Interfaccia (§ 8) con il bottone "Sincronizza ora" (fatta in parte il 2026-11-12, § 8.1).
 8. Primo allineamento reale con anteprima.
 
 ## 11. Rischi
