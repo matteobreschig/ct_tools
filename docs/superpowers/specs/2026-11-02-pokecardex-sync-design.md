@@ -195,6 +195,22 @@ mostra le date di vendita. Limite noto: una carta venduta e poi ricomprata e rei
 Pokecardex verrebbe proposta per la rimozione; l'anteprima permette di invertire. Dal secondo giro
 lo storico non serve più: le vendite si vedono come C ≠ base.
 
+**Primo giro per carta, condizioni da CardTrader** (decisione dell'utente, 2026-11-12). Il primo
+giro non confronta chiave per chiave ma carta per carta (stesso blueprint, lingua, reverse e prima
+edizione): le **quantità** le decide Pokecardex (tolte le copie vendute), le **condizioni** le
+decide CardTrader, che è quello che vede chi compra. Su 46 carte, quasi tutte del Set Base, le
+condizioni erano diverse e CardTrader era quasi sempre più severo di uno o due gradi: in quei casi
+si corregge la riga Pokecardex e l'inserzione CardTrader resta com'è. Le copie in più di
+Pokecardex tengono la loro condizione; se servono meno copie si tolgono prima quelle che
+Pokecardex non ha in quella condizione, dalla peggiore. Mint su Pokecardex è "Neuve" (1) e vale
+già NM.
+
+Le scritture di una carta vanno **tutte insieme o nessuna**: togliere la riga Pokecardex nella
+condizione vecchia senza poter aggiungere quella nuova perderebbe copie. Se una scrittura della
+carta non si può fare, la carta resta com'è e va in revisione. Una lingua già presente nella
+collezione per quella carta e versione si considera esistente anche se il catalogo Pokecardex non
+la elenca (molte carte vintage risultano senza italiano nel catalogo ma ci sono in collezione).
+
 Modifiche su entrambi i lati tra due giri (P ≠ base, C ≠ base, P ≠ C) restano un conflitto da
 rivedere: l'utente vende di rado, quindi è un caso raro (decisione dell'utente, 2026-11-12).
 
@@ -228,12 +244,11 @@ confronto**, e se la rilettura fallisce il giro si ferma. Revisioni: 493 righe s
 la versione Standard: si risolvono con la regola PRZP → `playprizep`), 59 di lingua, 29 in
 quarantena, 3 in attesa.
 
-**Prova a secco dopo la rilettura di CardTrader e con le vendite (2026-11-12):** Pokecardex −15
-copie su 4 chiavi (Abra, Kadabra, Rare Candy, Dawn vendute il 3 novembre); CardTrader +866 copie
-su 510 chiavi e −88 copie su 78 chiavi. Di queste 78, 47 sono cambi di condizione (la stessa carta
-registrata su Pokecardex con un'altra condizione: si toglie l'inserzione vecchia e se ne crea una
-nuova) e 31 carte presenti su CardTrader e assenti da Pokecardex. Revisioni: 375 righe senza
-abbinamento, 312 senza corrispondenza, 26 in quarantena; 121 in attesa (quasi tutte Delta Reign).
+**Prova a secco dopo la rilettura di CardTrader, con vendite e condizioni da CardTrader
+(2026-11-12):** Pokecardex −15 copie vendute (Abra, Kadabra, Rare Candy, Dawn del 3 novembre) e 46
+correzioni di condizione (46 righe tolte e 46 aggiunte); CardTrader +820 copie su 465 chiavi e −42
+copie su 32 chiavi in più rispetto a Pokecardex. Revisioni: 375 righe senza abbinamento, 312
+senza corrispondenza, 26 in quarantena; 121 in attesa (quasi tutte Delta Reign).
 
 ### 4.3 Scrivere su CardTrader
 
@@ -479,8 +494,9 @@ del § 4.2 sia per utente e per chiave carta.
 ## 12. Decisioni
 
 Dell'utente:
-- primo giro: anteprima con entrambi i valori, **Pokecardex** predefinito (2026-11-12, prima era
-  CardTrader), direzione invertibile;
+- primo giro: anteprima con entrambi i valori, quantità da **Pokecardex** (2026-11-12, prima era
+  CardTrader) tolte le copie vendute su CardTrader, condizioni da **CardTrader**, direzione
+  invertibile;
 - le carte presenti solo su CardTrader si aggiungono su Pokecardex (serve il catalogo completo);
 - NM da CardTrader verso Pokecardex: Excellent (6);
 - diminuzioni prima dalle inserzioni in vendita, poi da quelle ferme (§ 4.3);
