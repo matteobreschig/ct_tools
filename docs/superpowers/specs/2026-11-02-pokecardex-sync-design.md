@@ -19,7 +19,9 @@ venduta su CardTrader esce dalla collezione anche su Pokecardex.
 - Allineamento in tutte e due le direzioni: aggiunte, quantità, rimozioni, vendite.
 - Le carte nuove arrivano su CardTrader **ferme** e da lì decide la vendita dinamica
   (`keep_quantity`, `ApplyDynamicSale`).
-- Giro automatico ogni 15 minuti più un bottone "Sincronizza ora".
+- Nessun giro automatico: la sincronizzazione parte solo dal bottone "Sincronizza ora"
+  (decisione dell'utente, 2026-11-12). Niente programmazione e niente traffico verso
+  Pokecardex quando l'utente non lo chiede.
 - Il primo allineamento passa da un'anteprima che l'utente approva.
 - Dopo il primo allineamento il pannello scrive da solo ciò di cui è sicuro (§ 6) e mette il
   resto in una lista "Da rivedere".
@@ -269,9 +271,11 @@ ritentativo automatico delle carte in attesa.
 
 Dal blueprint alla carta Pokecardex (verso opposto): il pannello tiene il **catalogo completo** di
 Pokecardex (decisione dell'utente: una carta presente solo su CardTrader va aggiunta anche su
-Pokecardex). `get_all_collection` restituisce solo le carte possedute, quindi una volta al giorno
-il pannello scarica il catalogo serie per serie con `get_cartes` (circa 250 serie, una chiamata al
-secondo, più `lang=jp` per le giapponesi) e lo salva in `pokecardex_cards`. Da lì il verso
+Pokecardex). `get_all_collection` restituisce solo le carte possedute, quindi il pannello tiene
+un catalogo in `pokecardex_cards`. Senza giri programmati (§ 1.1) il catalogo si carica su
+richiesta, dentro il giro manuale: solo le serie che servono (quelle delle carte presenti solo su
+CardTrader), con `get_cartes`, una chiamata al secondo, più `lang=jp` per le giapponesi. Una serie
+già in catalogo si riscarica solo se ha più di un giorno. Da lì il verso
 opposto usa lo stesso abbinamento per ID Cardmarket: blueprint → `cardmarket_product_id` →
 `id_card`. Un prodotto CardTrader che non trova nessuna carta nel catalogo va in revisione una volta.
 
@@ -301,9 +305,10 @@ giro il pannello ritenta l'abbinamento; quando riesce, la carta segue il percors
   JSON inatteso) il giro si ferma **prima di qualunque scrittura** e manda una notifica.
 - Se un lato restituisce meno del 90% delle copie del giro precedente (soglia configurabile), il
   giro si ferma e manda una notifica. Copre sessioni scadute che rispondono con collezioni vuote.
-- Se un giro automatico vuole togliere più di 20 copie in totale (soglia configurabile), non
+- Se un giro vuole togliere più di 20 copie in totale (soglia configurabile), non
   scrive e prepara un'anteprima da approvare.
-- Un solo giro alla volta (`withoutOverlapping`, lock per utente).
+- Un solo giro alla volta per utente (lock): un secondo clic mentre il giro è in corso non ne
+  avvia un altro.
 - Il client Pokecardex non espone `delete_all` né altre azioni di massa.
 - Login: al massimo un tentativo per giro; dopo un rifiuto per credenziali, niente più tentativi
   finché l'utente non salva di nuovo le credenziali.
@@ -312,8 +317,9 @@ giro il pannello ritenta l'abbinamento; quando riesce, la carta segue il percors
 
 ### 8.1 Pagina "Pokecardex" (Filament)
 
-- Stato: ultimo giro, esito, prossimo giro, eventuale blocco attivo (§ 7) con il motivo.
-- Bottone **Sincronizza ora**.
+- Stato: ultimo giro, esito, eventuale blocco attivo (§ 7) con il motivo.
+- Bottone **Sincronizza ora**: unico modo per avviare un giro. Il giro gira in coda e la
+  pagina mostra quando è in corso e quando finisce.
 - **Anteprima**: elenco delle scritture proposte, raggruppate per direzione (verso CardTrader,
   verso Pokecardex) con nome carta, espansione, numero, condizione, lingua, versione, quantità
   prima e dopo. Bottoni "Applica" e "Annulla". Compare al primo giro e quando scatta la soglia del
@@ -328,16 +334,16 @@ giro il pannello ritenta l'abbinamento; quando riesce, la carta segue il percors
 
 Componente `MyProfilePokecardex` accanto agli altri (fatto): username e password, salvati per
 account nella tabella `pokecardex_accounts`, password cifrata (cast `encrypted`) e mai rimandata
-al modulo. L'interruttore "sincronizzazione automatica attiva" arriva con la sincronizzazione.
+al modulo. Non c'è interruttore di sincronizzazione automatica: la sincronizzazione è solo manuale (§ 1.1).
 
 ## 9. Modello dati (indicativo)
 
 ```
 pokecardex_accounts          user_id, username, password (encrypted), session_cookies (encrypted, json),
-                             decrypt_key (nullable), enabled, last_run_at, blocked_reason (nullable)
+                             decrypt_key (nullable), last_run_at, blocked_reason (nullable)
 pokecardex_series            id_serie (PK), lang (en|jp), code, name_us, id_cardmarket, expansion_id (nullable)
 pokecardex_cards             id_card (PK), id_serie, num_card, name_en, id_cardmarket, versions (json)
-                             (catalogo completo, aggiornato ogni giorno)
+                             (catalogo caricato per serie su richiesta, § 5.4)
 pokecardex_series_rules      user_id, id_serie, id_version → ct expansion_id (regole di serie, § 5.3)
 pokecardex_card_matches      user_id?, id_card, id_version → blueprint_id, reverse, first_edition,
                              source (cardmarket|export|manual)
@@ -361,10 +367,10 @@ del § 4.2 sia per utente e per chiave carta.
    aggiunta, una modifica di quantità e una cancellazione su una carta di prova, per avere nomi
    e parametri esatti delle azioni (§ 2.2). Annullare subito dopo.
 3. Client Pokecardex (login, sessione, chiave, lettura, scrittura) con test su risposte registrate.
-4. Catalogo giornaliero di Pokecardex, traduzioni e abbinamenti (§ 5).
+4. Catalogo Pokecardex su richiesta, traduzioni e abbinamenti (§ 5).
 5. Confronto a tre e freni (§ 4, § 7), con test.
 6. Scritture su CardTrader e Pokecardex.
-7. Interfaccia (§ 8) e programmazione ogni 15 minuti.
+7. Interfaccia (§ 8) con il bottone "Sincronizza ora".
 8. Primo allineamento reale con anteprima.
 
 ## 11. Rischi
@@ -374,7 +380,9 @@ del § 4.2 sia per utente e per chiave carta.
 - Cloudflare può bloccare le richieste da server in qualunque momento.
 - Termini di servizio di Pokecardex non verificati per l'uso automatizzato.
 - Le versioni speciali chiedono manutenzione a ogni espansione con varianti nuove.
-- Ritardo: una carta venduta su CardTrader resta su Pokecardex fino a 15 minuti.
+- Ritardo: una carta venduta su CardTrader resta su Pokecardex finché l'utente non sincronizza.
+  Se nel frattempo la modifica anche su Pokecardex, il confronto a tre (§ 4) la tratta come
+  modifica su entrambi i lati.
 
 ## 12. Decisioni
 
