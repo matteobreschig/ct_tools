@@ -57,8 +57,9 @@ class PokecardexSeries extends Model
     }
 
     /**
-     * Versioni speciali presenti nelle carte della serie in catalogo (tutte
-     * tranne Standard, Reverse e 1st Edition), per le regole.
+     * Versioni presenti nelle carte della serie in catalogo, per le regole.
+     * Esclusa solo la Standard; Reverse e 1st Edition servono quando
+     * CardTrader le tiene in un'espansione a parte.
      *
      * @return array<int, string>
      */
@@ -68,7 +69,7 @@ class PokecardexSeries extends Model
             ->where('id_serie', $this->id_serie)
             ->get()
             ->flatMap(fn (PokecardexCard $card): array => $card->versions ?? [])
-            ->reject(fn (array $version): bool => in_array((int) $version['id_version'], [1, 2, 6], true))
+            ->reject(fn (array $version): bool => (int) $version['id_version'] === 1)
             ->mapWithKeys(fn (array $version): array => [(int) $version['id_version'] => $version['nom_version_us'] ?? (string) $version['id_version']])
             ->sortKeys()
             ->all();

@@ -42,8 +42,20 @@ final class CardMatcher
             return $this->matched($manual->blueprint_id, $traits, 'manual');
         }
 
+        // Una regola di serie vince anche sulle versioni sicure: in alcuni set
+        // CardTrader tiene le reverse in un'espansione a parte (Ascended
+        // Heroes: `e-asc`), e l'ID Cardmarket porterebbe alla carta sbagliata.
+        $rule = PokecardexSeriesRule::query()
+            ->with('expansion')
+            ->where(['id_serie' => $card->id_serie, 'id_version' => $idVersion])
+            ->first();
+
+        if ($rule !== null) {
+            return $this->matchByRule($card, $idVersion, $rule, $traits);
+        }
+
         return Translator::versionTraits($idVersion) === null
-            ? $this->matchSpecialVersion($card, $idVersion, $versionName, $traits)
+            ? CardMatch::review('Versione speciale "'.($versionName ?? $idVersion).'" senza regola di serie.')
             : $this->matchByCardmarket($card, $idVersion, $traits);
     }
 
@@ -130,17 +142,8 @@ final class CardMatcher
     /**
      * @param  array{reverse: bool, first_edition: bool}  $traits
      */
-    private function matchSpecialVersion(PokecardexCard $card, int $idVersion, ?string $versionName, array $traits): CardMatch
+    private function matchByRule(PokecardexCard $card, int $idVersion, PokecardexSeriesRule $rule, array $traits): CardMatch
     {
-        $rule = PokecardexSeriesRule::query()
-            ->with('expansion')
-            ->where(['id_serie' => $card->id_serie, 'id_version' => $idVersion])
-            ->first();
-
-        if ($rule === null) {
-            return CardMatch::review('Versione speciale "'.($versionName ?? $idVersion).'" senza regola di serie.');
-        }
-
         if (! $this->cardtrader->load($rule->expansion)) {
             return CardMatch::pending('CardTrader sta ancora preparando il catalogo dell\'espansione della regola.');
         }

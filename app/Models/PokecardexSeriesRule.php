@@ -19,14 +19,15 @@ class PokecardexSeriesRule extends Model
     ];
 
     /**
-     * Cambiare o togliere una regola rende vecchi gli abbinamenti che ne sono
-     * nati: si cancellano e il prossimo giro li ricalcola.
+     * Cambiare o togliere una regola rende vecchi gli abbinamenti automatici
+     * di quella versione (per regola o per ID Cardmarket): si cancellano e il
+     * prossimo giro li ricalcola. Quelli manuali restano.
      */
     protected static function booted(): void
     {
         $forget = function (PokecardexSeriesRule $rule): void {
             PokecardexCardMatch::query()
-                ->where('source', 'rule')
+                ->whereIn('source', ['rule', 'cardmarket'])
                 ->whereIn('id_version', array_filter([$rule->id_version, $rule->getOriginal('id_version')]))
                 ->whereIn('id_card', PokecardexCard::query()->where('id_serie', $rule->id_serie)->select('id_card'))
                 ->delete();

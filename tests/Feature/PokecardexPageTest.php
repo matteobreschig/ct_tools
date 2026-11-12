@@ -133,5 +133,5 @@ it('forgets the matches of a rule when the rule changes', function () {
 
     $rule->update(['expansion_id' => Expansion::factory()->create()->id]);
 
-    expect(PokecardexCardMatch::pluck('source')->all())->toBe(['cardmarket']);
+    expect(PokecardexCardMatch::pluck('id_version')->all())->toBe([1]);
 });

@@ -241,3 +241,18 @@ it('uses the Cardmarket id inside a mixed rule expansion where numbers repeat', 
         ->and($target->idCard)->toBe($card->id_card)
         ->and($target->idVersion)->toBe(144);
 });
+
+it('lets a series rule take over a safe version kept apart on CardTrader', function () {
+    $energyReverse = Expansion::factory()->create(['code' => 'e-twm', 'blueprints_loaded_at' => now()]);
+    PokecardexSeriesRule::create(['id_serie' => $this->series->id_serie, 'id_version' => 2, 'expansion_id' => $energyReverse->id]);
+    $card = twmCard();
+    twmBlueprint();
+    $apart = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $energyReverse->ct_id, 'collector_number' => '053', 'cardmarket_product_id' => 870135]);
+
+    $match = $this->matcher->match($card, 2);
+
+    expect($match->status)->toBe(PokecardexMatchStatus::Matched)
+        ->and($match->blueprintId)->toBe($apart->blueprint_id)
+        ->and($match->reverse)->toBeTrue()
+        ->and($match->source)->toBe('rule');
+});
