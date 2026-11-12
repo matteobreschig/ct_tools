@@ -100,6 +100,16 @@ class PokecardexClient
     }
 
     /**
+     * Tutte le carte di una serie, possedute o no.
+     *
+     * @return array<string, mixed>
+     */
+    public function seriesCards(int $idSerie, string $lang = 'en'): array
+    {
+        return $this->read('get_cartes', ['id' => $idSerie, 'lang' => $lang, 'masterSetMode' => 'false']);
+    }
+
+    /**
      * Aggiunge una riga e ne restituisce l'id (`id_collection`).
      */
     public function addRow(int $idCard, int $idVersion, int $idEtat, int $idLangue, int $quantity): int
@@ -228,7 +238,7 @@ class PokecardexClient
                 'X-CSRF-TOKEN' => $this->csrfToken(),
                 'X-Requested-With' => 'XMLHttpRequest',
             ])
-            ->post("/api/collection/{$action}", [...$parameters, 'lang' => 'en']));
+            ->post("/api/collection/{$action}", ['lang' => 'en', ...$parameters]));
     }
 
     private function login(): void

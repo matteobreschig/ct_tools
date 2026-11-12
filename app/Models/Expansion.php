@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use Database\Factories\ExpansionFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Expansion extends Model
 {
+    /** @use HasFactory<ExpansionFactory> */
+    use HasFactory;
+
     protected $fillable = [
         'ct_id',
         'code',
@@ -21,6 +26,7 @@ class Expansion extends Model
     {
         return [
             'release_date' => 'datetime',
+            'blueprints_loaded_at' => 'datetime',
         ];
     }
 }
