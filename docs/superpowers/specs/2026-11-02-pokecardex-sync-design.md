@@ -59,17 +59,28 @@ sessione reale dell'utente nel browser, solo in lettura. Può cambiare senza pre
 ### 2.2 Chiamate
 
 Tutte `POST https://www.pokecardex.com/api/collection/<azione>`, corpo
-`application/x-www-form-urlencoded`.
+`application/x-www-form-urlencoded`, intestazione `X-CSRF-TOKEN` col valore del meta
+`csrf-token` della pagina. Ogni azione accetta anche `lang` (lingua dell'interfaccia, non della
+carta). Le scritture sono state osservate dal browser il 2026-11-12 su una carta di prova
+(Scarhino 001/103 di Règne Delta, `id_card=26642`, versione Standard) e annullate subito dopo.
 
-| Azione | Uso | Stato |
-|---|---|---|
-| `series` (`lang=en`) | anagrafiche: `blocs[].series[]` (con `id_serie`, `nom_court`, `id_cardmarket`, `count`), `etats`, `langues`, `versions` | verificata |
-| `get_all_collection` (`lang=en`) | tutta la collezione in una chiamata: `cartes[]`, `collection[]`, prezzi | verificata: 1,2 s, 7,3 MB, 2205 carte, 2686 righe, 5954 copie |
-| `get_cartes` (`id`, `lang`, `masterSetMode=false`) | una serie | presente nel bundle, non riprovata |
-| `add_carte_collection` | nuova riga | presente nel bundle, non provata |
-| `update_carte_collection` | modifica riga | citata nel documento originale, **non trovata** nel bundle attuale |
-| `delete_normale_carte_collection`, `delete_reverse_carte_collection`, `delete_version_carte_collection` | cancellazioni | presenti nel bundle, parametri **da scoprire** |
-| `delete_all` | azzera la collezione | **vietata**: il client non deve poterla chiamare |
+| Azione | Parametri | Risposta | Stato |
+|---|---|---|---|
+| `series` (`lang=en`) | | anagrafiche: `blocs[].series[]` (con `id_serie`, `nom_court`, `id_cardmarket`, `count`), `etats`, `langues`, `versions` | verificata |
+| `get_all_collection` (`lang=en`) | | tutta la collezione: `cartes[]`, `collection[]`, prezzi | verificata anche da server il 2026-11-12: 0,7 s, 7,4 MB, 2222 carte, 2703 righe, 6139 copie |
+| `get_carte_details` | `id_card` | cifrata: dettaglio di una carta con le sue righe | osservata |
+| `get_cartes` (`id`, `lang`, `masterSetMode=false`) | | una serie | presente nel bundle, non riprovata |
+| `add_carte_collection` | `id_card`, `quantite`, `id_etat`, `id_version`, `id_langue` | `{"id_ajout": <id riga>}` in chiaro, 200 | osservata |
+| `update_carte_collection` | `id_collection` (id riga), `id_card`, `quantite`, `id_etat`, `id_version`, `id_langue`, `prix_achat`, `date_achat`, `note` (vuoti ammessi) | vuota, 204 | osservata: cambia quantità e condizione insieme |
+| `plus_carte_collection` | `id_collection` | vuota, 204 | osservata: +1 sulla riga |
+| `delete_carte_collection` | `id_collection` | vuota, 204 | osservata: cancella **una** riga |
+| `delete_normale_carte_collection` | `id_card` | vuota, 204 | osservata: toglie **tutte** le righe Standard della carta (interruttore rapido della griglia). Il client non la usa |
+| `delete_reverse_carte_collection`, `delete_version_carte_collection` | | | presenti nel bundle, stesso rischio della precedente: il client non le usa |
+| `delete_all` | | azzera la collezione | **vietata**: il client non deve poterla chiamare |
+
+Il client scrive solo con `add_carte_collection`, `update_carte_collection` e
+`delete_carte_collection`, sempre per singola riga (`id_collection`). Valori osservati:
+`id_etat` 1 Neuve, 6 Excellent (§ 5.1); `id_version` 1 Standard; `id_langue` 1 francese.
 
 La giapponese si legge con `lang=jp`: **da verificare** se `get_all_collection` con `lang=jp`
 restituisce la collezione giapponese separata.
@@ -315,8 +326,9 @@ giro il pannello ritenta l'abbinamento; quando riesce, la carta segue il percors
 
 ### 8.2 Profilo
 
-Nuovo componente `MyProfilePokecardex` accanto agli altri: username, password, interruttore
-"sincronizzazione automatica attiva". Password salvata cifrata (cast `encrypted`).
+Componente `MyProfilePokecardex` accanto agli altri (fatto): username e password, salvati per
+account nella tabella `pokecardex_accounts`, password cifrata (cast `encrypted`) e mai rimandata
+al modulo. L'interruttore "sincronizzazione automatica attiva" arriva con la sincronizzazione.
 
 ## 9. Modello dati (indicativo)
 
@@ -341,10 +353,11 @@ del § 4.2 sia per utente e per chiave carta.
 
 ## 10. Ordine di lavoro
 
-1. **Prova da server** (usa e getta): comando artisan che fa login, legge `get_all_collection`,
-   decifra e stampa i conteggi. L'utente lo lancia con le proprie credenziali nel `.env`. Se
+1. **Prova da server** (fatto il 2026-11-12, Cloudflare non blocca; usa e getta): comando artisan che fa login, legge `get_all_collection`,
+   decifra e stampa i conteggi. Legge le credenziali dal profilo dell'utente indicato
+   (`php artisan pokecardex:probe <email>`), nessuna credenziale nel `.env`. Se
    Cloudflare blocca le richieste da server, ci si ferma e si ridiscute il progetto.
-2. **Scoperta delle scritture**: dal browser dell'utente, con la rete sotto osservazione, una
+2. **Scoperta delle scritture** (fatto il 2026-11-12, risultati nel § 2.2): dal browser dell'utente, con la rete sotto osservazione, una
    aggiunta, una modifica di quantità e una cancellazione su una carta di prova, per avere nomi
    e parametri esatti delle azioni (§ 2.2). Annullare subito dopo.
 3. Client Pokecardex (login, sessione, chiave, lettura, scrittura) con test su risposte registrate.
