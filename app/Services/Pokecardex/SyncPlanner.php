@@ -23,8 +23,9 @@ use Illuminate\Support\Collection;
  * | P = base, C ≠ base         | C su Pokecardex           |
  * | P ≠ base, C ≠ base, P ≠ C  | conflitto                 |
  *
- * Al primo giro (nessuna base) ogni differenza propone il valore di CardTrader
- * (decisione dell'utente) e passa dall'anteprima.
+ * Al primo giro (nessuna base) ogni differenza propone il valore di Pokecardex
+ * (decisione dell'utente, 2026-11-12: le carte si inseriscono su Pokecardex e
+ * le differenze sono copie mai portate su CardTrader) e passa dall'anteprima.
  */
 final class SyncPlanner
 {
@@ -126,7 +127,7 @@ final class SyncPlanner
     private function direction(KeyState $state, bool $firstRun): ?PokecardexSyncDirection
     {
         if ($firstRun) {
-            return PokecardexSyncDirection::ToPokecardex;
+            return PokecardexSyncDirection::ToCardTrader;
         }
 
         $base = $state->base ?? 0;

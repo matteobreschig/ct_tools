@@ -177,10 +177,16 @@ base com'era: il giro dopo la riprova.
 
 Il primo giro non ha base: tutte le differenze vanno in anteprima (§ 8.1) e l'approvazione
 dell'utente crea la base. Per ogni chiave con P ≠ C l'anteprima mostra entrambi i valori e
-propone come predefinito il valore di CardTrader (decisione dell'utente); l'utente può invertire
-la direzione riga per riga, o per gruppi (per esempio tutta un'espansione), prima di applicare.
-Il freno sulle rimozioni (§ 7) non si applica a questa anteprima, perché è già una revisione
-completa.
+propone come predefinito il valore di **Pokecardex** (decisione dell'utente, 2026-11-12, che
+sostituisce quella iniziale "vince CardTrader"): le carte si inseriscono e modificano su
+Pokecardex, si vendono di rado su CardTrader, e dopo aver riletto CardTrader tutte le 514 chiavi
+diverse avevano più copie su Pokecardex (881 copie mai portate su CardTrader, nessun caso
+opposto). L'utente può invertire la direzione riga per riga, o per gruppi (per esempio tutta
+un'espansione), prima di applicare. Il freno sulle rimozioni (§ 7) non si applica a questa
+anteprima, perché è già una revisione completa.
+
+Modifiche su entrambi i lati tra due giri (P ≠ base, C ≠ base, P ≠ C) restano un conflitto da
+rivedere: l'utente vende di rado, quindi è un caso raro (decisione dell'utente, 2026-11-12).
 
 ### 4.2.1 Come è fatto (2026-11-12)
 
@@ -451,7 +457,8 @@ del § 4.2 sia per utente e per chiave carta.
 ## 12. Decisioni
 
 Dell'utente:
-- primo giro: anteprima con entrambi i valori, CardTrader predefinito, direzione invertibile;
+- primo giro: anteprima con entrambi i valori, **Pokecardex** predefinito (2026-11-12, prima era
+  CardTrader), direzione invertibile;
 - le carte presenti solo su CardTrader si aggiungono su Pokecardex (serve il catalogo completo);
 - NM da CardTrader verso Pokecardex: Excellent (6);
 - diminuzioni prima dalle inserzioni in vendita, poi da quelle ferme (§ 4.3);

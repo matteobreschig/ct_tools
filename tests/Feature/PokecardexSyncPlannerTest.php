@@ -81,11 +81,11 @@ function froslassListing(int $quantity, array $attributes = []): Product
     ], $attributes));
 }
 
-function froslassBase(int $quantity, bool $reverse = false): void
+function froslassBase(int $quantity, bool $reverse = false, string $language = 'it'): void
 {
     PokecardexSyncState::create([
         'user_id' => test()->user->id, 'blueprint_id' => FROSLASS_BLUEPRINT, 'condition' => 'nm',
-        'language' => 'it', 'reverse' => $reverse, 'first_edition' => false, 'quantity' => $quantity,
+        'language' => $language, 'reverse' => $reverse, 'first_edition' => false, 'quantity' => $quantity,
     ]);
 }
 
@@ -101,16 +101,16 @@ function onlyChange(SyncPlan $plan)
     return $plan->changes[0];
 }
 
-it('proposes CardTrader values on the first run', function () {
-    froslassListing(3);
+it('proposes Pokecardex values on the first run', function () {
+    froslassListing(1);
 
-    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 3]]));
 
     expect($plan->firstRun)->toBeTrue();
     $change = onlyChange($plan);
-    expect($change->direction)->toBe(PokecardexSyncDirection::ToPokecardex)
-        ->and($change->state->pokecardex)->toBe(1)
-        ->and($change->state->cardtrader)->toBe(3)
+    expect($change->direction)->toBe(PokecardexSyncDirection::ToCardTrader)
+        ->and($change->state->pokecardex)->toBe(3)
+        ->and($change->state->cardtrader)->toBe(1)
         ->and($change->quantityAfter())->toBe(3);
 });
 
@@ -187,6 +187,7 @@ it('keeps reverse and standard copies on different keys', function () {
 });
 
 it('finds where to add on Pokecardex', function () {
+    froslassBase(0, reverse: true);
     froslassListing(2, ['reverse' => true]);
 
     $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
@@ -197,6 +198,7 @@ it('finds where to add on Pokecardex', function () {
 });
 
 it('does not add on Pokecardex in a language the card does not exist in', function () {
+    froslassBase(0, language: 'de');
     froslassListing(1, ['language' => 'de']);
 
     $plan = $this->planner->plan($this->user, froslassCollection([]));
@@ -207,6 +209,7 @@ it('does not add on Pokecardex in a language the card does not exist in', functi
 });
 
 it('does not add on Pokecardex a card that has rows to review there', function () {
+    froslassBase(0);
     froslassListing(1);
 
     $plan = $this->planner->plan($this->user, froslassCollection([[101, 197, 6, 1, 2]]));
