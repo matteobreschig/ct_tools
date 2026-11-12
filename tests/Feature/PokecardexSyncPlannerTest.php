@@ -1,0 +1,234 @@
+<?php
+
+use App\Enums\ConditionType;
+use App\Enums\Language;
+use App\Enums\PokecardexSyncDirection;
+use App\Models\CtExpansionBlueprint;
+use App\Models\Expansion;
+use App\Models\PokecardexAccount;
+use App\Models\PokecardexCard;
+use App\Models\PokecardexSeries;
+use App\Models\PokecardexSyncState;
+use App\Models\Product;
+use App\Models\User;
+use App\Services\CTApiClient;
+use App\Services\Pokecardex\BlueprintCatalog;
+use App\Services\Pokecardex\CardKey;
+use App\Services\Pokecardex\CardMatcher;
+use App\Services\Pokecardex\PokecardexCatalog;
+use App\Services\Pokecardex\SyncPlan;
+use App\Services\Pokecardex\SyncPlanner;
+use App\Services\PokecardexClient;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+
+uses(RefreshDatabase::class);
+
+/*
+ * Confronto a tre (§ 4 del design). Cataloghi già caricati: nessuna chiamata
+ * esce. Carta di prova: Froslass 53 di TWM, blueprint 287733, italiano.
+ */
+
+const FROSLASS_BLUEPRINT = 287733;
+
+beforeEach(function () {
+    Http::preventStrayRequests();
+
+    $this->user = User::factory()->create(['ct_api_key' => 'test-key']);
+    $account = PokecardexAccount::factory()->for($this->user)->create();
+
+    $this->planner = new SyncPlanner(new CardMatcher(
+        new PokecardexCatalog(new PokecardexClient($account)),
+        new BlueprintCatalog(new CTApiClient($this->user)),
+    ));
+
+    $this->expansion = Expansion::factory()->create(['code' => 'twm', 'blueprints_loaded_at' => now()]);
+    $series = PokecardexSeries::factory()->create(['code' => 'TWM', 'expansion_id' => $this->expansion->id, 'cards_loaded_at' => now()]);
+    $this->card = PokecardexCard::factory()->create([
+        'id_card' => 26600, 'id_serie' => $series->id_serie, 'num_card' => '053/167', 'id_cardmarket' => 769227,
+        'versions' => [
+            ['id_version' => 1, 'nom_version_us' => 'Standard', 'langues' => [1, 2, 4]],
+            ['id_version' => 2, 'nom_version_us' => 'Reverse', 'langues' => [1, 2, 4]],
+            ['id_version' => 197, 'nom_version_us' => 'Reverse (Masterball)', 'langues' => [2]],
+        ],
+    ]);
+    CtExpansionBlueprint::factory()->create([
+        'blueprint_id' => FROSLASS_BLUEPRINT, 'expansion_ct_id' => $this->expansion->ct_id,
+        'collector_number' => '053', 'cardmarket_product_id' => 769227,
+    ]);
+});
+
+/**
+ * @param  list<array{0: int, 1: int, 2: int, 3: int, 4?: int}>  $rows  [id_collection, id_version, id_etat, quantite, id_langue]
+ * @return array{cartes: list<array<string, mixed>>, collection: list<array<string, int>>}
+ */
+function froslassCollection(array $rows): array
+{
+    return [
+        'cartes' => [],
+        'collection' => array_map(fn (array $row): array => [
+            'id_collection' => $row[0], 'id_card' => 26600, 'id_version' => $row[1],
+            'id_etat' => $row[2], 'id_langue' => $row[4] ?? 4, 'quantite' => $row[3],
+        ], $rows),
+    ];
+}
+
+function froslassListing(int $quantity, array $attributes = []): Product
+{
+    return Product::factory()->create(array_merge([
+        'user_id' => test()->user->id, 'blueprint_id' => FROSLASS_BLUEPRINT, 'expansion_id' => test()->expansion->id,
+        'condition' => 'nm', 'language' => 'it', 'reverse' => false, 'quantity' => $quantity,
+    ], $attributes));
+}
+
+function froslassBase(int $quantity, bool $reverse = false): void
+{
+    PokecardexSyncState::create([
+        'user_id' => test()->user->id, 'blueprint_id' => FROSLASS_BLUEPRINT, 'condition' => 'nm',
+        'language' => 'it', 'reverse' => $reverse, 'first_edition' => false, 'quantity' => $quantity,
+    ]);
+}
+
+function froslassKey(bool $reverse = false): string
+{
+    return (new CardKey(FROSLASS_BLUEPRINT, ConditionType::NM, Language::IT, $reverse, false))->id();
+}
+
+function onlyChange(SyncPlan $plan)
+{
+    expect($plan->changes)->toHaveCount(1);
+
+    return $plan->changes[0];
+}
+
+it('proposes CardTrader values on the first run', function () {
+    froslassListing(3);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
+
+    expect($plan->firstRun)->toBeTrue();
+    $change = onlyChange($plan);
+    expect($change->direction)->toBe(PokecardexSyncDirection::ToPokecardex)
+        ->and($change->state->pokecardex)->toBe(1)
+        ->and($change->state->cardtrader)->toBe(3)
+        ->and($change->quantityAfter())->toBe(3);
+});
+
+it('records agreed keys when both sides match', function () {
+    froslassListing(2);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 1, 1], [102, 1, 6, 1]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and($plan->agreed)->toHaveCount(1)
+        ->and($plan->agreed[0]->key->id())->toBe(froslassKey());
+});
+
+it('applies the three-way rules', function (int $pokecardex, int $cardtrader, int $base, ?PokecardexSyncDirection $direction, bool $conflict) {
+    froslassBase($base);
+    if ($cardtrader > 0) {
+        froslassListing($cardtrader);
+    }
+    $rows = $pokecardex > 0 ? [[101, 1, 6, $pokecardex]] : [];
+
+    $plan = $this->planner->plan($this->user, froslassCollection($rows));
+
+    expect($plan->firstRun)->toBeFalse()
+        ->and($plan->conflicts)->toHaveCount($conflict ? 1 : 0);
+
+    if ($direction === null) {
+        expect($plan->changes)->toBeEmpty();
+    } else {
+        expect(onlyChange($plan)->direction)->toBe($direction);
+    }
+})->with([
+    'nothing changed' => [2, 2, 2, null, false],
+    'changed on Pokecardex' => [3, 2, 2, PokecardexSyncDirection::ToCardTrader, false],
+    'removed on Pokecardex' => [0, 2, 2, PokecardexSyncDirection::ToCardTrader, false],
+    'sold on CardTrader' => [2, 1, 2, PokecardexSyncDirection::ToPokecardex, false],
+    'changed on both sides the same way' => [3, 3, 2, null, false],
+    'changed on both sides differently' => [3, 1, 2, null, true],
+    'new on Pokecardex' => [2, 0, 0, PokecardexSyncDirection::ToCardTrader, false],
+]);
+
+it('puts Neuve and Excellent on the same NM key', function () {
+    froslassBase(1);
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 1, 1], [102, 1, 6, 2]]));
+
+    $change = onlyChange($plan);
+    expect($change->state->pokecardex)->toBe(3)
+        ->and($change->direction)->toBe(PokecardexSyncDirection::ToCardTrader)
+        ->and($change->state->rows)->toHaveCount(2);
+});
+
+it('ignores signed and altered listings', function () {
+    froslassBase(1);
+    froslassListing(1);
+    froslassListing(5, ['signed' => true]);
+    froslassListing(5, ['altered' => true]);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and($plan->cardtraderCopies)->toBe(11);
+});
+
+it('keeps reverse and standard copies on different keys', function () {
+    froslassListing(1);
+    froslassListing(2, ['reverse' => true]);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1], [102, 2, 6, 2]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and(collect($plan->agreed)->map(fn ($state) => $state->key->id())->sort()->values()->all())
+        ->toBe(collect([froslassKey(), froslassKey(true)])->sort()->values()->all());
+});
+
+it('finds where to add on Pokecardex', function () {
+    froslassListing(2, ['reverse' => true]);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
+
+    $change = collect($plan->changes)->first(fn ($change) => $change->state->key->reverse);
+    expect($change->direction)->toBe(PokecardexSyncDirection::ToPokecardex)
+        ->and($change->target)->toBe(['id_card' => 26600, 'id_version' => 2]);
+});
+
+it('does not add on Pokecardex in a language the card does not exist in', function () {
+    froslassListing(1, ['language' => 'de']);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and($plan->reviews)->toHaveCount(1)
+        ->and($plan->reviews[0]->kind)->toBe('language');
+});
+
+it('does not add on Pokecardex a card that has rows to review there', function () {
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 197, 6, 1, 2]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and(collect($plan->reviews)->pluck('kind')->sort()->values()->all())->toBe(['quarantine', 'unmatched']);
+});
+
+it('sends to review the Pokecardex rows in languages CardTrader does not have', function () {
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1, 8]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and($plan->reviews[0]->kind)->toBe('language')
+        ->and($plan->pokecardexCopies)->toBe(1);
+});
+
+it('counts the copies that a plan would remove', function () {
+    froslassBase(5);
+    froslassListing(5);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 2]]));
+
+    expect(onlyChange($plan)->removedCopies())->toBe(3)
+        ->and($plan->removedCopies())->toBe(3);
+});

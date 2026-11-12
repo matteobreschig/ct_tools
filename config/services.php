@@ -28,6 +28,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'pokecardex' => [
+        // Freni della sincronizzazione (§ 7 del design).
+        'min_copies_ratio' => (float) env('POKECARDEX_MIN_COPIES_RATIO', 0.9),
+        'max_removed_copies' => (int) env('POKECARDEX_MAX_REMOVED_COPIES', 20),
+    ],
+
     'telegram-bot-api' => [
         'token' => env('TELEGRAM_BOT_TOKEN'),
     ],

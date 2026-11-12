@@ -6,13 +6,16 @@ use App\Casts\MoneyCast;
 use App\Enums\ConditionType;
 use App\Enums\Language;
 use App\Models\Concerns\HasCardImageVariants;
+use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 
 class Product extends Model
 {
-    use HasCardImageVariants;
+    /** @use HasFactory<ProductFactory> */
+    use HasCardImageVariants, HasFactory;
 
     protected $fillable = [
         'user_id',
