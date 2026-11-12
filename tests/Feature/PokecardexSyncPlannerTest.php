@@ -235,3 +235,84 @@ it('counts the copies that a plan would remove', function () {
     expect(onlyChange($plan)->removedCopies())->toBe(3)
         ->and($plan->removedCopies())->toBe(3);
 });
+
+/**
+ * @return array<string, list<array{quantity: int, paid_at: string, order: string}>>
+ */
+function froslassSales(int $quantity, string $paidAt = '2026-11-03'): array
+{
+    return [froslassKey() => [['quantity' => $quantity, 'paid_at' => $paidAt, 'order' => 'C1']]];
+}
+
+it('removes from Pokecardex the copies already sold on CardTrader on the first run', function () {
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 2]]), froslassSales(1));
+
+    $change = onlyChange($plan);
+    expect($change->direction)->toBe(PokecardexSyncDirection::ToPokecardex)
+        ->and($change->quantityBefore())->toBe(2)
+        ->and($change->quantityAfter())->toBe(1)
+        ->and($change->sales[0]['paid_at'])->toBe('2026-11-03');
+});
+
+it('splits a first-run difference between sold copies and copies to add', function () {
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 4]]), froslassSales(1));
+
+    $byDirection = collect($plan->changes)->keyBy(fn ($change) => $change->direction->value);
+    expect($plan->changes)->toHaveCount(2)
+        ->and($byDirection['to_pokecardex']->quantityAfter())->toBe(3)
+        ->and($byDirection['to_cardtrader']->quantityBefore())->toBe(1)
+        ->and($byDirection['to_cardtrader']->quantityAfter())->toBe(3);
+});
+
+it('never counts more sold copies than the difference', function () {
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 2]]), froslassSales(5));
+
+    expect(onlyChange($plan)->quantityAfter())->toBe(1);
+});
+
+it('uses the sales only on the first run', function () {
+    froslassBase(1);
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 2]]), froslassSales(1));
+
+    $change = onlyChange($plan);
+    expect($change->direction)->toBe(PokecardexSyncDirection::ToCardTrader)
+        ->and($change->quantityAfter())->toBe(2);
+});
+
+it('does not remove from CardTrader a card whose Pokecardex rows are to review', function () {
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 197, 6, 1, 2]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and(collect($plan->reviews)->pluck('kind')->sort()->values()->all())->toBe(['quarantine', 'unmatched']);
+});
+
+it('does not remove from CardTrader a listing with no Pokecardex card', function () {
+    $other = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $this->expansion->ct_id, 'collector_number' => '099', 'cardmarket_product_id' => 123]);
+    froslassListing(2, ['blueprint_id' => $other->blueprint_id]);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and($plan->reviews[0]->kind)->toBe('no_target')
+        ->and($plan->reviews[0]->message)->toContain('non tolgo');
+});
+
+it('removes from CardTrader a card that is known and absent on Pokecardex', function () {
+    froslassListing(2);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([]));
+
+    $change = onlyChange($plan);
+    expect($change->direction)->toBe(PokecardexSyncDirection::ToCardTrader)
+        ->and($change->quantityAfter())->toBe(0);
+});

@@ -26,6 +26,8 @@ use Illuminate\Support\Collection;
  * Al primo giro (nessuna base) ogni differenza propone il valore di Pokecardex
  * (decisione dell'utente, 2026-11-12: le carte si inseriscono su Pokecardex e
  * le differenze sono copie mai portate su CardTrader) e passa dall'anteprima.
+ * Fanno eccezione le copie già vendute su CardTrader: fino alla differenza si
+ * tolgono da Pokecardex invece di essere reinserite su CardTrader.
  */
 final class SyncPlanner
 {
@@ -47,8 +49,9 @@ final class SyncPlanner
 
     /**
      * @param  array{collection: list<array<string, mixed>>}&array<string, mixed>  $collection  risposta di `get_all_collection`
+     * @param  array<string, list<array{quantity: int, paid_at: string, order: string}>>  $sales  vendite CardTrader per chiave (`CardTraderSales`), usate solo al primo giro
      */
-    public function plan(User $user, array $collection): SyncPlan
+    public function plan(User $user, array $collection, array $sales = []): SyncPlan
     {
         $this->reviews = [];
         $this->pending = [];
@@ -94,6 +97,12 @@ final class SyncPlanner
                 continue;
             }
 
+            if ($firstRun && $state->pokecardex > $state->cardtrader && isset($sales[$keyId])) {
+                array_push($changes, ...$this->firstRunWithSales($state, $sales[$keyId]));
+
+                continue;
+            }
+
             $direction = $this->direction($state, $firstRun);
 
             if ($direction === null) {
@@ -124,6 +133,29 @@ final class SyncPlanner
         );
     }
 
+    /**
+     * Primo giro, più copie su Pokecardex che su CardTrader, e vendite
+     * CardTrader per la chiave: le copie vendute (al massimo la differenza)
+     * si tolgono da Pokecardex, il resto si aggiunge su CardTrader.
+     *
+     * @param  list<array{quantity: int, paid_at: string, order: string}>  $sales
+     * @return list<KeyChange>
+     */
+    private function firstRunWithSales(KeyState $state, array $sales): array
+    {
+        $difference = $state->pokecardex - $state->cardtrader;
+        $sold = min($difference, array_sum(array_column($sales, 'quantity')));
+        $agreed = $state->pokecardex - $sold;
+
+        $changes = [new KeyChange($state, PokecardexSyncDirection::ToPokecardex, quantity: $agreed, sales: $sales)];
+
+        if ($agreed > $state->cardtrader) {
+            $changes[] = new KeyChange($state, PokecardexSyncDirection::ToCardTrader, quantity: $agreed);
+        }
+
+        return $changes;
+    }
+
     private function direction(KeyState $state, bool $firstRun): ?PokecardexSyncDirection
     {
         if ($firstRun) {
@@ -140,18 +172,49 @@ final class SyncPlanner
     }
 
     /**
-     * Un aumento su Pokecardex deve sapere dove aggiungere: carta e versione,
-     * in una lingua che esiste per quella versione.
+     * Controlli prima di scrivere:
+     * - un aumento su Pokecardex deve sapere dove aggiungere (carta e versione,
+     *   in una lingua che esiste per quella versione);
+     * - una diminuzione su CardTrader deve sapere a quale carta Pokecardex
+     *   corrisponde la chiave. Se quella carta ha righe Pokecardex senza
+     *   abbinamento sicuro, o non si trova, la copia potrebbe essere proprio in
+     *   quelle righe: niente rimozioni (§ 1.3).
      */
     private function prepare(KeyChange $change): ?KeyChange
     {
-        if ($change->direction !== PokecardexSyncDirection::ToPokecardex || $change->quantityAfter() <= $change->quantityBefore()) {
+        $addsOnPokecardex = $change->direction === PokecardexSyncDirection::ToPokecardex && $change->quantityAfter() > $change->quantityBefore();
+        $removesOnCardtrader = $change->direction === PokecardexSyncDirection::ToCardTrader && $change->quantityAfter() < $change->quantityBefore();
+
+        if (! $addsOnPokecardex && ! $removesOnCardtrader) {
             return $change;
         }
 
         $state = $change->state;
         $payload = ['key' => $state->key->attributes(), 'pokecardex' => $state->pokecardex, 'cardtrader' => $state->cardtrader];
-        $target = $this->target($state);
+
+        if ($removesOnCardtrader) {
+            $cards = collect($state->rows)->pluck('idCard')->unique();
+
+            if ($cards->isEmpty()) {
+                $target = $this->target($state, 'non tolgo copie da CardTrader');
+
+                if ($target === null) {
+                    return null;
+                }
+
+                $cards = collect([$target['id_card']]);
+            }
+
+            if ($cards->contains(fn (int $idCard): bool => isset($this->quarantinedCards[$idCard]))) {
+                $this->reviews[] = new ReviewItem('quarantine', 'La carta ha righe Pokecardex da rivedere: niente rimozioni da CardTrader finché non sono risolte.', $payload);
+
+                return null;
+            }
+
+            return $change;
+        }
+
+        $target = $this->target($state, 'non so dove aggiungerla su Pokecardex');
 
         if ($target === null) {
             return null;
@@ -172,13 +235,13 @@ final class SyncPlanner
             return null;
         }
 
-        return new KeyChange($state, $change->direction, $target);
+        return $change->withTarget($target);
     }
 
     /**
      * @return array{id_card: int, id_version: int}|null
      */
-    private function target(KeyState $state): ?array
+    private function target(KeyState $state, string $consequence): ?array
     {
         $fromRows = collect($state->rows)
             ->map(fn (PokecardexRow $row): array => ['id_card' => $row->idCard, 'id_version' => $row->idVersion])
@@ -192,7 +255,7 @@ final class SyncPlanner
         $expansion = Expansion::find($state->products[0]->expansion_id ?? null);
 
         if ($expansion === null) {
-            $this->reviews[] = new ReviewItem('no_target', 'Inserzione CardTrader senza espansione: non so dove aggiungerla su Pokecardex.', $payload);
+            $this->reviews[] = new ReviewItem('no_target', "Inserzione CardTrader senza espansione: {$consequence}.", $payload);
 
             return null;
         }
@@ -200,7 +263,7 @@ final class SyncPlanner
         $match = $this->matcher->matchBlueprint($state->key->blueprintId, $expansion, $state->key->reverse, $state->key->firstEdition);
 
         if ($match->status !== PokecardexMatchStatus::Matched) {
-            $item = new ReviewItem($match->status === PokecardexMatchStatus::Pending ? 'pending' : 'no_target', (string) $match->reason, $payload);
+            $item = new ReviewItem($match->status === PokecardexMatchStatus::Pending ? 'pending' : 'no_target', "{$match->reason} Quindi {$consequence}.", $payload);
             $match->status === PokecardexMatchStatus::Pending ? $this->pending[] = $item : $this->reviews[] = $item;
 
             return null;
