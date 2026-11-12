@@ -49,6 +49,32 @@ class PokecardexSeries extends Model
     }
 
     /**
+     * @return HasMany<PokecardexSeriesRule, $this>
+     */
+    public function rules(): HasMany
+    {
+        return $this->hasMany(PokecardexSeriesRule::class, 'id_serie');
+    }
+
+    /**
+     * Versioni speciali presenti nelle carte della serie in catalogo (tutte
+     * tranne Standard, Reverse e 1st Edition), per le regole.
+     *
+     * @return array<int, string>
+     */
+    public function specialVersionOptions(): array
+    {
+        return PokecardexCard::query()
+            ->where('id_serie', $this->id_serie)
+            ->get()
+            ->flatMap(fn (PokecardexCard $card): array => $card->versions ?? [])
+            ->reject(fn (array $version): bool => in_array((int) $version['id_version'], [1, 2, 6], true))
+            ->mapWithKeys(fn (array $version): array => [(int) $version['id_version'] => $version['nom_version_us'] ?? (string) $version['id_version']])
+            ->sortKeys()
+            ->all();
+    }
+
+    /**
      * @return HasMany<PokecardexCard, $this>
      */
     public function cards(): HasMany

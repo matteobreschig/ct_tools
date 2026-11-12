@@ -2,6 +2,8 @@
 
 namespace App\Services\Pokecardex;
 
+use App\Models\PokecardexCard;
+
 /**
  * Esito del confronto a tre: cosa scrivere, cosa è già allineato, cosa chiede
  * una decisione. Non scrive niente.
@@ -73,14 +75,21 @@ final readonly class SyncPlan
      */
     public function toArray(): array
     {
+        $cardIds = collect($this->changes)
+            ->flatMap(fn (KeyChange $change): array => [...array_map(fn (PokecardexRow $row): int => $row->idCard, $change->state->rows), $change->target['id_card'] ?? null])
+            ->filter()
+            ->unique();
+        $cards = PokecardexCard::query()->whereIn('id_card', $cardIds)->get(['id_card', 'name_en', 'num_card'])->keyBy('id_card');
+        $card = fn (KeyChange $change): ?PokecardexCard => $cards->get($change->state->rows[0]->idCard ?? $change->target['id_card'] ?? 0);
+
         return [
             'first_run' => $this->firstRun,
             'pokecardex_copies' => $this->pokecardexCopies,
             'cardtrader_copies' => $this->cardtraderCopies,
             'changes' => array_map(fn (KeyChange $change): array => [
                 'key' => $change->state->key->attributes(),
-                'name' => $change->state->products[0]->name ?? null,
-                'collector_number' => $change->state->products[0]->collector_number ?? null,
+                'name' => $change->state->products[0]->name ?? $card($change)?->name_en,
+                'collector_number' => $change->state->products[0]->collector_number ?? $card($change)?->num_card,
                 'direction' => $change->direction->value,
                 'before' => $change->quantityBefore(),
                 'after' => $change->quantityAfter(),

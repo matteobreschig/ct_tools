@@ -19,6 +19,24 @@ class PokecardexSeriesRule extends Model
     ];
 
     /**
+     * Cambiare o togliere una regola rende vecchi gli abbinamenti che ne sono
+     * nati: si cancellano e il prossimo giro li ricalcola.
+     */
+    protected static function booted(): void
+    {
+        $forget = function (PokecardexSeriesRule $rule): void {
+            PokecardexCardMatch::query()
+                ->where('source', 'rule')
+                ->whereIn('id_version', array_filter([$rule->id_version, $rule->getOriginal('id_version')]))
+                ->whereIn('id_card', PokecardexCard::query()->where('id_serie', $rule->id_serie)->select('id_card'))
+                ->delete();
+        };
+
+        static::saved($forget);
+        static::deleted($forget);
+    }
+
+    /**
      * @return BelongsTo<Expansion, $this>
      */
     public function expansion(): BelongsTo
