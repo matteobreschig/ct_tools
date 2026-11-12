@@ -25,8 +25,8 @@ class PokecardexCardFactory extends Factory
             'name_en' => fake()->word(),
             'id_cardmarket' => fake()->unique()->numberBetween(100000, 999999),
             'versions' => [
-                ['id_version' => 1, 'nom_version_us' => 'Standard', 'langues' => [1, 2, 3, 4, 5, 6, 7]],
-                ['id_version' => 2, 'nom_version_us' => 'Reverse', 'langues' => [1, 2, 3, 4, 5, 6, 7]],
+                ['id_version' => 1, 'nom_version_us' => 'Standard', 'langues' => array_map(fn (int $id): array => ['statut' => 'confirmed', 'id_langue' => $id], [1, 2, 3, 4, 5, 6, 7])],
+                ['id_version' => 2, 'nom_version_us' => 'Reverse', 'langues' => array_map(fn (int $id): array => ['statut' => 'confirmed', 'id_langue' => $id], [1, 2, 3, 4, 5, 6, 7])],
             ],
         ];
     }

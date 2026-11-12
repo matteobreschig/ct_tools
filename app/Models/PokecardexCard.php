@@ -73,6 +73,8 @@ class PokecardexCard extends Model
 
     /**
      * Lingue in cui esiste la versione. Null se Pokecardex non le indica.
+     * Pokecardex dà ogni lingua come `{statut, id_langue}`, con statut
+     * "confirmed" o "presumed": valgono entrambe.
      *
      * @return list<int>|null
      */
@@ -80,7 +82,14 @@ class PokecardexCard extends Model
     {
         $languages = $this->version($idVersion)['langues'] ?? null;
 
-        return is_array($languages) ? array_map('intval', $languages) : null;
+        if (! is_array($languages)) {
+            return null;
+        }
+
+        return array_values(array_map(
+            fn (mixed $language): int => (int) (is_array($language) ? ($language['id_langue'] ?? 0) : $language),
+            $languages,
+        ));
     }
 
     /**

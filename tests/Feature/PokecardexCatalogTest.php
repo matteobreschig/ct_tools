@@ -42,7 +42,7 @@ function catalogCard(int $idCard, string $number, int $cardmarketId): array
     return [
         'id_card' => $idCard, 'id_serie' => 222, 'num_card' => $number, 'name_card_en' => "Card {$idCard}",
         'id_cardmarket' => $cardmarketId, 'nom_court' => 'TWM',
-        'versions' => [['id_card' => $idCard, 'id_version' => 1, 'nom_version_us' => 'Standard', 'only_english' => false, 'langues' => [1, 2]]],
+        'versions' => [['id_card' => $idCard, 'id_version' => 1, 'nom_version_us' => 'Standard', 'only_english' => false, 'langues' => [['statut' => 'confirmed', 'id_langue' => 2], ['statut' => 'presumed', 'id_langue' => 4]]]],
     ];
 }
 
@@ -111,7 +111,7 @@ it('loads the cards of a series only when they are missing or older than a day',
 
     expect(PokecardexCard::count())->toBe(2)
         ->and(PokecardexCard::find(26600)->collectorNumber())->toBe('53')
-        ->and(PokecardexCard::find(26600)->languagesOf(1))->toBe([1, 2]);
+        ->and(PokecardexCard::find(26600)->languagesOf(1))->toBe([2, 4]);
     Http::assertSentCount(2);
 
     $this->travel(25)->hours();
