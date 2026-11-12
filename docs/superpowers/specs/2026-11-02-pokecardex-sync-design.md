@@ -182,6 +182,31 @@ la direzione riga per riga, o per gruppi (per esempio tutta un'espansione), prim
 Il freno sulle rimozioni (§ 7) non si applica a questa anteprima, perché è già una revisione
 completa.
 
+### 4.2.1 Come è fatto (2026-11-12)
+
+`App\Services\Pokecardex\SyncPlanner` produce un `SyncPlan` e non scrive niente:
+- le righe Pokecardex passano dagli abbinamenti (§ 5.4) e dalle traduzioni; quelle senza
+  abbinamento sicuro, lingua o condizione vanno in revisione o in attesa e restano fuori dal
+  confronto;
+- **quarantena:** una carta Pokecardex con almeno una riga senza abbinamento sicuro non riceve
+  aggiunte. Senza questo freno un'inserzione CardTrader della stessa carta verrebbe aggiunta su
+  Pokecardex come doppione della riga non abbinata;
+- un aumento su Pokecardex deve sapere dove aggiungere: carta e versione delle righe esistenti
+  della chiave, se sono una sola; altrimenti l'abbinamento inverso (§ 5.4). Serve anche la lingua
+  sulla versione di destinazione (§ 4.4). Se manca qualcosa → revisione;
+- le chiavi senza base valgono base 0 dopo il primo giro;
+- copie lette per i freni: tutte le righe Pokecardex e tutte le inserzioni CardTrader, anche
+  quelle escluse dal confronto.
+
+**Prova a secco sui dati reali (2026-11-12), primo giro:** 6153 copie su Pokecardex, 3758 su
+CardTrader secondo la tabella `products`, che però era ferma al 12 giugno 2026. Il piano avrebbe
+tolto 1991 copie da Pokecardex; il freno del primo giro lo manda comunque in anteprima. Da qui una
+regola per il passo 6: **ogni giro rilegge le inserzioni CardTrader (`SyncProducts`) prima del
+confronto**, e se la rilettura fallisce il giro si ferma. Revisioni: 493 righe senza abbinamento,
+266 inserzioni senza destinazione su Pokecardex (144 sono Prize Pack, che su Pokecardex non hanno
+la versione Standard: si risolvono con la regola PRZP → `playprizep`), 59 di lingua, 29 in
+quarantena, 3 in attesa.
+
 ### 4.3 Scrivere su CardTrader
 
 - **Aumento:** se esiste un'inserzione ferma con quella chiave, aumentarne `quantity`;
@@ -347,6 +372,10 @@ giro il pannello ritenta l'abbinamento; quando riesce, la carta segue il percors
 - Login: al massimo un tentativo per giro; dopo un rifiuto per credenziali, niente più tentativi
   finché l'utente non salva di nuovo le credenziali.
 
+Fatti il 2026-11-12 (`SyncSafety`): soglia copie e soglia rimozioni in `config/services.php`
+(`POKECARDEX_MIN_COPIES_RATIO`, `POKECARDEX_MAX_REMOVED_COPIES`), confronto con l'ultimo giro
+`applied` in `pokecardex_sync_runs`. Il lock per utente arriva col giro vero (passo 6).
+
 ## 8. Interfaccia
 
 ### 8.1 Pagina "Pokecardex" (Filament)
@@ -403,7 +432,7 @@ del § 4.2 sia per utente e per chiave carta.
    e parametri esatti delle azioni (§ 2.2). Annullare subito dopo.
 3. Client Pokecardex (login, sessione, chiave, lettura, scrittura) con test su risposte registrate.
 4. Catalogo Pokecardex su richiesta, traduzioni e abbinamenti (§ 5) (fatto il 2026-11-12).
-5. Confronto a tre e freni (§ 4, § 7), con test.
+5. Confronto a tre e freni (§ 4, § 7), con test (fatto il 2026-11-12, § 4.2.1).
 6. Scritture su CardTrader e Pokecardex.
 7. Interfaccia (§ 8) con il bottone "Sincronizza ora".
 8. Primo allineamento reale con anteprima.
