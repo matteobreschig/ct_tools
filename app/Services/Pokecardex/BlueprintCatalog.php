@@ -62,6 +62,7 @@ final class BlueprintCatalog
                 'expansion_ct_id' => $expansion->ct_id,
                 'name' => $blueprint['name'] ?? null,
                 'collector_number' => $blueprint['fixed_properties']['collector_number'] ?? null,
+                'version' => filled($blueprint['version'] ?? null) ? $blueprint['version'] : null,
                 'cardmarket_product_id' => $blueprint['card_market_ids'][0] ?? null,
                 'cardmarket_product_ids' => json_encode($blueprint['card_market_ids'] ?? []),
                 'created_at' => $now,
@@ -72,7 +73,7 @@ final class BlueprintCatalog
             CtExpansionBlueprint::upsert(
                 $chunk->values()->all(),
                 ['blueprint_id'],
-                ['expansion_ct_id', 'name', 'collector_number', 'cardmarket_product_id', 'cardmarket_product_ids', 'updated_at'],
+                ['expansion_ct_id', 'name', 'collector_number', 'version', 'cardmarket_product_id', 'cardmarket_product_ids', 'updated_at'],
             );
         }
 

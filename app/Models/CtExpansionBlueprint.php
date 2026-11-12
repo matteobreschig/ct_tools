@@ -25,6 +25,7 @@ class CtExpansionBlueprint extends Model
         'expansion_ct_id',
         'name',
         'collector_number',
+        'version',
         'cardmarket_product_id',
         'cardmarket_product_ids',
     ];
@@ -34,5 +35,18 @@ class CtExpansionBlueprint extends Model
         return [
             'cardmarket_product_ids' => 'array',
         ];
+    }
+
+    /**
+     * Variante dichiarata da CardTrader nel campo `version`, prima della barra:
+     * "Cosmos Holo | 150/159" → "cosmosholo". Null se il campo non ne indica una.
+     */
+    public function variantLabel(): ?string
+    {
+        if (! str_contains((string) $this->version, '|')) {
+            return null;
+        }
+
+        return PokecardexCard::normalizeVariantLabel(explode('|', $this->version)[0]);
     }
 }

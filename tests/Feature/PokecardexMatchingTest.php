@@ -256,3 +256,47 @@ it('lets a series rule take over a safe version kept apart on CardTrader', funct
         ->and($match->reverse)->toBeTrue()
         ->and($match->source)->toBe('rule');
 });
+
+it('tells Prize Pack Non Holo and Cosmos apart by the CardTrader variant', function () {
+    $prizePack = Expansion::factory()->create(['code' => 'playprizep', 'blueprints_loaded_at' => now()]);
+    $series = PokecardexSeries::factory()->create(['code' => 'PRZP', 'cards_loaded_at' => now()]);
+    foreach ([144, 147] as $version) {
+        PokecardexSeriesRule::create(['id_serie' => $series->id_serie, 'id_version' => $version, 'expansion_id' => $prizePack->id]);
+    }
+    $card = PokecardexCard::factory()->create([
+        'id_serie' => $series->id_serie, 'num_card' => '150/159', 'name_en' => 'Levincia', 'id_cardmarket' => 842718,
+        'versions' => [
+            ['id_version' => 144, 'nom_version_us' => 'Non Holo (PPS)', 'langues' => [2, 4]],
+            ['id_version' => 147, 'nom_version_us' => 'Cosmos Holo (PPS)', 'langues' => [2, 4]],
+        ],
+    ]);
+    PokecardexCard::factory()->create(['id_serie' => $series->id_serie, 'num_card' => '150/217', 'name_en' => 'Dratini', 'versions' => [['id_version' => 144, 'nom_version_us' => 'Non Holo (PPS)', 'langues' => [2]]]]);
+    $nonHolo = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Levincia', 'collector_number' => '150nh', 'version' => 'Non-Holo | 150/159', 'cardmarket_product_id' => 842718]);
+    $cosmos = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Levincia', 'collector_number' => '150h', 'version' => 'Cosmos Holo | 150/159', 'cardmarket_product_id' => 842719]);
+
+    expect($this->matcher->match($card, 144)->blueprintId)->toBe($nonHolo->blueprint_id)
+        ->and($this->matcher->match($card, 147)->blueprintId)->toBe($cosmos->blueprint_id);
+
+    PokecardexCardMatch::query()->delete();
+
+    $fromCosmos = $this->matcher->matchBlueprint($cosmos->blueprint_id, $prizePack, reverse: false, firstEdition: false);
+    $fromNonHolo = $this->matcher->matchBlueprint($nonHolo->blueprint_id, $prizePack, reverse: false, firstEdition: false);
+
+    expect($fromCosmos->status)->toBe(PokecardexMatchStatus::Matched)
+        ->and([$fromCosmos->idCard, $fromCosmos->idVersion])->toBe([$card->id_card, 147])
+        ->and([$fromNonHolo->idCard, $fromNonHolo->idVersion])->toBe([$card->id_card, 144]);
+});
+
+it('keeps a single blueprint even if its variant label differs from the Pokecardex name', function () {
+    $pokeBall = Expansion::factory()->create(['code' => 'p-twm', 'blueprints_loaded_at' => now()]);
+    PokecardexSeriesRule::create(['id_serie' => $this->series->id_serie, 'id_version' => 94, 'expansion_id' => $pokeBall->id]);
+    $card = twmCard(['versions' => [['id_version' => 94, 'nom_version_us' => 'Reverse (Pokeball)', 'langues' => [2]]]]);
+    $special = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $pokeBall->ct_id, 'collector_number' => '053', 'version' => 'Poké Ball Reverse Holo | 053/167', 'cardmarket_product_id' => 770001]);
+
+    expect($this->matcher->match($card, 94)->blueprintId)->toBe($special->blueprint_id);
+
+    PokecardexCardMatch::query()->delete();
+
+    $target = $this->matcher->matchBlueprint($special->blueprint_id, $pokeBall, reverse: true, firstEdition: false);
+    expect([$target->idCard, $target->idVersion])->toBe([$card->id_card, 94]);
+});

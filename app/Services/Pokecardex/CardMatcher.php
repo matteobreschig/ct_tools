@@ -160,6 +160,8 @@ final class CardMatcher
             $candidates = $blueprints->filter(fn (CtExpansionBlueprint $blueprint): bool => PokecardexCard::normalizeCollectorNumber($blueprint->collector_number) === $card->collectorNumber());
         }
 
+        $candidates = $this->sameVariant($candidates, $blueprints, PokecardexCard::normalizeVariantLabel($card->version($idVersion)['nom_version_us'] ?? null));
+
         if ($candidates->count() !== 1) {
             return CardMatch::review("La regola di serie porta a {$candidates->count()} blueprint con numero {$card->collectorNumber()}.");
         }
@@ -171,13 +173,53 @@ final class CardMatcher
     }
 
     /**
+     * Varianti dichiarate da CardTrader (Prize Pack: "Non-Holo | 150/159",
+     * "Cosmos Holo | 150/159"): blueprint diversi, ID Cardmarket diversi, mentre
+     * Pokecardex ha una carta sola con più versioni e un ID Cardmarket solo. Se
+     * i blueprint trovati o i loro gemelli (stesso numero e nome) dichiarano
+     * una variante, vince quello con la variante della versione Pokecardex.
+     *
+     * @param  Collection<int, CtExpansionBlueprint>  $candidates
+     * @param  Collection<int, CtExpansionBlueprint>  $blueprints  tutti i blueprint dell'espansione
+     * @return Collection<int, CtExpansionBlueprint>
+     */
+    private function sameVariant(Collection $candidates, Collection $blueprints, ?string $variant): Collection
+    {
+        if ($variant === null || $candidates->isEmpty()) {
+            return $candidates;
+        }
+
+        $twins = $blueprints->filter(fn (CtExpansionBlueprint $blueprint): bool => $candidates->contains(
+            fn (CtExpansionBlueprint $candidate): bool => PokecardexCard::collectorDigits($candidate->collector_number) === PokecardexCard::collectorDigits($blueprint->collector_number)
+                && mb_strtolower((string) $candidate->name) === mb_strtolower((string) $blueprint->name),
+        ));
+
+        // La variante serve solo a scegliere tra gemelli: un blueprint senza
+        // gemelli resta valido anche se la sua etichetta ("Ultra Rare | …",
+        // "Poké Ball Reverse Holo | …") non somiglia al nome Pokecardex.
+        if ($twins->count() < 2 || $twins->every(fn (CtExpansionBlueprint $blueprint): bool => $blueprint->variantLabel() === null)) {
+            return $candidates;
+        }
+
+        return $twins->filter(fn (CtExpansionBlueprint $blueprint): bool => $blueprint->variantLabel() === $variant)->values();
+    }
+
+    /**
      * @param  Collection<int, PokecardexSeriesRule>  $rules
      */
     private function matchBlueprintByRules(CtExpansionBlueprint $blueprint, Collection $rules, bool $reverse, bool $firstEdition): BlueprintMatch
     {
         $number = PokecardexCard::normalizeCollectorNumber($blueprint->collector_number);
 
-        $candidates = $rules->flatMap(function (PokecardexSeriesRule $rule) use ($blueprint, $number, $reverse, $firstEdition): array {
+        $hasTwins = CtExpansionBlueprint::query()
+            ->where('expansion_ct_id', $blueprint->expansion_ct_id)
+            ->where('blueprint_id', '!=', $blueprint->blueprint_id)
+            ->where('name', $blueprint->name)
+            ->get()
+            ->contains(fn (CtExpansionBlueprint $twin): bool => PokecardexCard::collectorDigits($twin->collector_number) === PokecardexCard::collectorDigits($blueprint->collector_number));
+        $variant = $hasTwins ? $blueprint->variantLabel() : null;
+
+        $candidates = $rules->flatMap(function (PokecardexSeriesRule $rule) use ($blueprint, $number, $reverse, $firstEdition, $variant): array {
             $series = PokecardexSeries::find($rule->id_serie);
 
             if ($series === null) {
@@ -189,13 +231,21 @@ final class CardMatcher
             $cards = PokecardexCard::query()
                 ->where('id_serie', $series->id_serie)
                 ->get()
-                ->filter(fn (PokecardexCard $card): bool => $this->versionFits($card, $rule->id_version, $reverse, $firstEdition));
+                ->filter(fn (PokecardexCard $card): bool => $this->versionFits($card, $rule->id_version, $reverse, $firstEdition)
+                    && ($variant === null || PokecardexCard::normalizeVariantLabel($card->version($rule->id_version)['nom_version_us'] ?? null) === $variant));
 
             $sameCardmarket = $blueprint->cardmarket_product_id === null
                 ? collect()
                 : $cards->where('id_cardmarket', $blueprint->cardmarket_product_id);
 
-            return ($sameCardmarket->count() === 1 ? $sameCardmarket : $cards->filter(fn (PokecardexCard $card): bool => $card->collectorNumber() === $number))
+            // Col numero, a parità di numero conta anche il nome: nelle
+            // espansioni miste lo stesso numero compare su carte diverse.
+            $sameNumber = $cards->filter(fn (PokecardexCard $card): bool => $variant === null
+                ? $card->collectorNumber() === $number
+                : PokecardexCard::collectorDigits($card->num_card) === PokecardexCard::collectorDigits($blueprint->collector_number)
+                    && mb_strtolower((string) $card->name_en) === mb_strtolower((string) $blueprint->name));
+
+            return ($sameCardmarket->count() === 1 ? $sameCardmarket : $sameNumber)
                 ->map(fn (PokecardexCard $card): array => [$card->id_card, $rule->id_version])
                 ->values()
                 ->all();

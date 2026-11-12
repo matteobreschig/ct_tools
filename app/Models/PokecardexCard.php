@@ -82,4 +82,26 @@ class PokecardexCard extends Model
 
         return is_array($languages) ? array_map('intval', $languages) : null;
     }
+
+    /**
+     * Etichetta di variante confrontabile tra i due siti: minuscole, senza
+     * parentesi e senza segni. "Non Holo (PPS)" e "Non-Holo" → "nonholo".
+     */
+    public static function normalizeVariantLabel(?string $label): ?string
+    {
+        $normalized = preg_replace('/[^a-z]/', '', strtolower(preg_replace('/\(.*?\)/', '', (string) $label)));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    /**
+     * Solo le cifre del numero di collezione, senza zeri iniziali: "180nh",
+     * "180h" e "180/182" → "180". Serve a riconoscere i blueprint gemelli.
+     */
+    public static function collectorDigits(?string $number): ?string
+    {
+        $digits = ltrim(preg_replace('/\D/', '', explode('/', (string) $number)[0]), '0');
+
+        return $digits === '' ? null : $digits;
+    }
 }
