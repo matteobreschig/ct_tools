@@ -300,7 +300,8 @@ senza corrispondenza, 26 in quarantena; 121 in attesa (quasi tutte Delta Reign).
 
 Scrittori: `CardTraderWriter` (aumento sull'inserzione ferma o nuova inserzione ferma con prezzo di
 disattivazione e tag vacanza; diminuzione prima dalle inserzioni in vendita; inserzione a zero
-cancellata con `DELETE /products/{id}`, **chiamata non ancora provata dal vivo**) e
+cancellata con `DELETE /products/{id}`, provata dal vivo il 2026-11-12: inserzione di prova ferma su
+Abra 80 TWM, creata con quantità 1, cancellata da `CardTraderWriter` e assente dall'export subito dopo) e
 `PokecardexWriter` (aumento sulla riga con la stessa traduzione o riga nuova; diminuzione dalla
 riga più recente).
 
