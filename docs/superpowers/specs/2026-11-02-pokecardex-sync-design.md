@@ -185,6 +185,16 @@ opposto). L'utente può invertire la direzione riga per riga, o per gruppi (per 
 un'espansione), prima di applicare. Il freno sulle rimozioni (§ 7) non si applica a questa
 anteprima, perché è già una revisione completa.
 
+**Copie vendute prima del primo giro** (decisione dell'utente, 2026-11-12). Senza base, una copia
+venduta su CardTrader e rimasta su Pokecardex sembra una copia mai caricata, e verrebbe
+reinserita (e magari rimessa in vendita). Il primo giro legge quindi tutto lo storico vendite
+CardTrader (`/orders?order_as=seller`, `CardTraderSales`), escludendo ordini annullati e carte
+firmate o alterate, e lo raggruppa per chiave. Per ogni chiave con P > C le copie vendute, fino
+alla differenza, si **tolgono da Pokecardex**; il resto si aggiunge su CardTrader. L'anteprima
+mostra le date di vendita. Limite noto: una carta venduta e poi ricomprata e reinserita su
+Pokecardex verrebbe proposta per la rimozione; l'anteprima permette di invertire. Dal secondo giro
+lo storico non serve più: le vendite si vedono come C ≠ base.
+
 Modifiche su entrambi i lati tra due giri (P ≠ base, C ≠ base, P ≠ C) restano un conflitto da
 rivedere: l'utente vende di rado, quindi è un caso raro (decisione dell'utente, 2026-11-12).
 
@@ -200,6 +210,11 @@ rivedere: l'utente vende di rado, quindi è un caso raro (decisione dell'utente,
 - un aumento su Pokecardex deve sapere dove aggiungere: carta e versione delle righe esistenti
   della chiave, se sono una sola; altrimenti l'abbinamento inverso (§ 5.4). Serve anche la lingua
   sulla versione di destinazione (§ 4.4). Se manca qualcosa → revisione;
+- **niente rimozioni da CardTrader al buio:** una diminuzione su CardTrader richiede di sapere a
+  quale carta Pokecardex corrisponde la chiave (dalle righe o dall'abbinamento inverso) e che
+  quella carta non sia in quarantena. Senza questo freno, con "vince Pokecardex", le inserzioni
+  di carte con righe Pokecardex non abbinate (es. Prize Pack senza regola) sarebbero state
+  cancellate da CardTrader perché per il confronto valevano 0;
 - le chiavi senza base valgono base 0 dopo il primo giro;
 - copie lette per i freni: tutte le righe Pokecardex e tutte le inserzioni CardTrader, anche
   quelle escluse dal confronto.
@@ -212,6 +227,13 @@ confronto**, e se la rilettura fallisce il giro si ferma. Revisioni: 493 righe s
 266 inserzioni senza destinazione su Pokecardex (144 sono Prize Pack, che su Pokecardex non hanno
 la versione Standard: si risolvono con la regola PRZP → `playprizep`), 59 di lingua, 29 in
 quarantena, 3 in attesa.
+
+**Prova a secco dopo la rilettura di CardTrader e con le vendite (2026-11-12):** Pokecardex −15
+copie su 4 chiavi (Abra, Kadabra, Rare Candy, Dawn vendute il 3 novembre); CardTrader +866 copie
+su 510 chiavi e −88 copie su 78 chiavi. Di queste 78, 47 sono cambi di condizione (la stessa carta
+registrata su Pokecardex con un'altra condizione: si toglie l'inserzione vecchia e se ne crea una
+nuova) e 31 carte presenti su CardTrader e assenti da Pokecardex. Revisioni: 375 righe senza
+abbinamento, 312 senza corrispondenza, 26 in quarantena; 121 in attesa (quasi tutte Delta Reign).
 
 ### 4.3 Scrivere su CardTrader
 
