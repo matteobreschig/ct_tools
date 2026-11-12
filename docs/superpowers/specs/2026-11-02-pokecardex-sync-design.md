@@ -368,6 +368,21 @@ Il primo criterio serve alle espansioni miste come Prize Pack, dove lo stesso nu
 volte. Il flag reverse di una versione speciale si ricava dal nome ("Reverse (...)"): le
 inserzioni CardTrader di `p-asc`, `e-asc`, `p-wht` sono tutte reverse.
 
+**Le regole vincono anche sulle versioni sicure** (2026-11-12). In Ascended Heroes CardTrader non
+tiene le reverse nell'espansione principale `asc` ma in `e-asc` (Energy Reverse) e `p-asc` (Ball &
+Rocket), con ID Cardmarket propri. La reverse "Energy" di Pokecardex è la normale versione 2, che
+per ID Cardmarket finiva sulla carta di `asc` con il flag reverse: il piano avrebbe aggiunto su
+`asc` 24 copie reverse già presenti su `e-asc`. Ora una regola per (serie, versione) ha la
+precedenza su qualunque versione, Standard esclusa; creare o cambiare una regola cancella gli
+abbinamenti automatici di quella versione.
+
+Regole e abbinamenti salvati nel database di sviluppo il 2026-11-12 (da rifare in produzione,
+dalla pagina "Serie Pokecardex"): PRZP → `playprizep` con 144, 147, 149 → `playprizep`; SVE →
+`sveen`; SVP → `svpromo`; PRWC → `wiz`; SK → `skg` (il codice `SK` coincide con `sk`, Premium
+Trainer Box VSTAR); ASC 2 → `e-asc`, 94 e 214…218 → `p-asc`; PRE, WHT, BLK 94 → `p-…`, 197 → `m-…`.
+Effetto sulla collezione: righe senza abbinamento da 375 a 91, inserzioni senza corrispondenza da
+312 a 94, 4359 copie già allineate.
+
 Verso opposto (blueprint → carta Pokecardex): abbinamento salvato compatibile con reverse e prima
 edizione; altrimenti, se l'espansione è destinazione di regole, carte delle serie delle regole
 (ID Cardmarket, poi numero); altrimenti carte delle serie abbinate all'espansione per ID
