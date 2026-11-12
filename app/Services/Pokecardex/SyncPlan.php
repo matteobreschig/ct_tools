@@ -32,4 +32,66 @@ final readonly class SyncPlan
     {
         return array_sum(array_map(fn (KeyChange $change): int => $change->removedCopies(), $this->changes));
     }
+
+    /**
+     * Impronta delle scritture: uguale solo se il piano scriverebbe le stesse
+     * cose. Serve ad applicare un'anteprima approvata solo se nel frattempo
+     * nulla è cambiato.
+     */
+    public function fingerprint(): string
+    {
+        return sha1(json_encode(array_map(fn (KeyChange $change): array => [
+            $change->state->key->id(),
+            $change->direction->value,
+            $change->quantityBefore(),
+            $change->quantityAfter(),
+            $change->target,
+        ], $this->changes)));
+    }
+
+    /**
+     * Copie su ciascun lato dopo le scritture del piano.
+     *
+     * @return array{pokecardex: int, cardtrader: int}
+     */
+    public function copiesAfter(): array
+    {
+        $copies = ['pokecardex' => $this->pokecardexCopies, 'cardtrader' => $this->cardtraderCopies];
+
+        foreach ($this->changes as $change) {
+            $side = $change->direction->value === 'to_cardtrader' ? 'cardtrader' : 'pokecardex';
+            $copies[$side] += $change->quantityAfter() - $change->quantityBefore();
+        }
+
+        return $copies;
+    }
+
+    /**
+     * Il piano in forma salvabile, per l'anteprima e lo storico.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'first_run' => $this->firstRun,
+            'pokecardex_copies' => $this->pokecardexCopies,
+            'cardtrader_copies' => $this->cardtraderCopies,
+            'changes' => array_map(fn (KeyChange $change): array => [
+                'key' => $change->state->key->attributes(),
+                'name' => $change->state->products[0]->name ?? null,
+                'collector_number' => $change->state->products[0]->collector_number ?? null,
+                'direction' => $change->direction->value,
+                'before' => $change->quantityBefore(),
+                'after' => $change->quantityAfter(),
+                'pokecardex' => $change->state->pokecardex,
+                'cardtrader' => $change->state->cardtrader,
+                'target' => $change->target,
+                'sales' => $change->sales,
+            ], $this->changes),
+            'conflicts' => count($this->conflicts),
+            'reviews' => array_map(fn (ReviewItem $item): array => ['kind' => $item->kind, 'message' => $item->message, 'payload' => $item->payload], $this->reviews),
+            'pending' => array_map(fn (ReviewItem $item): array => ['kind' => $item->kind, 'message' => $item->message, 'payload' => $item->payload], $this->pending),
+        ];
+    }
 }
