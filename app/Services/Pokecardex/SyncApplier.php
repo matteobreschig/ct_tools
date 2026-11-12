@@ -33,12 +33,7 @@ final class SyncApplier
 
         $writes = [PokecardexSyncDirection::ToCardTrader->value => 0, PokecardexSyncDirection::ToPokecardex->value => 0];
 
-        $cards = collect($plan->changes)->groupBy(fn (KeyChange $change): string => implode('|', [
-            $change->state->key->blueprintId,
-            $change->state->key->language->value,
-            (int) $change->state->key->reverse,
-            (int) $change->state->key->firstEdition,
-        ]));
+        $cards = collect($plan->changes)->groupBy(fn (KeyChange $change): string => $change->state->key->variantId());
 
         foreach ($cards as $changes) {
             $ordered = $changes->sortBy(fn (KeyChange $change): int => $change->quantityAfter() > $change->quantityBefore() ? 0 : 1);

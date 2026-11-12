@@ -371,3 +371,37 @@ it('drops all writes of a card when one of them cannot be done', function () {
     expect($plan->changes)->toBeEmpty()
         ->and(collect($plan->reviews)->pluck('kind')->sort()->values()->all())->toBe(['quarantine', 'unmatched']);
 });
+
+function froslassVariant(): string
+{
+    return (new CardKey(FROSLASS_BLUEPRINT, ConditionType::NM, Language::IT, false, false))->variantId();
+}
+
+it('lets the user keep the CardTrader side of a card on the first run', function () {
+    froslassListing(1, ['condition' => 'sp']);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 3]]), sides: [froslassVariant() => 'cardtrader']);
+
+    expect(froslassChanges($plan))->toBe(['to_pokecardex:nm:3>0', 'to_pokecardex:sp:0>1']);
+});
+
+it('lets the user keep the Pokecardex side of a card on the first run, conditions included', function () {
+    froslassListing(1, ['condition' => 'sp']);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 3]]), froslassSales(1), [froslassVariant() => 'pokecardex']);
+
+    expect(froslassChanges($plan))->toBe(['to_cardtrader:nm:0>3', 'to_cardtrader:sp:1>0']);
+});
+
+it('resolves a conflict with the side the user chose', function (string $side, string $expected) {
+    froslassBase(2);
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 3]]), sides: [froslassVariant() => $side]);
+
+    expect($plan->conflicts)->toBeEmpty()
+        ->and(froslassChanges($plan))->toBe([$expected]);
+})->with([
+    'Pokecardex' => ['pokecardex', 'to_cardtrader:nm:1>3'],
+    'CardTrader' => ['cardtrader', 'to_pokecardex:nm:3>1'],
+]);

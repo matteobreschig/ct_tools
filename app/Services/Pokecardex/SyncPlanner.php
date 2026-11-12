@@ -61,8 +61,9 @@ final class SyncPlanner
     /**
      * @param  array{collection: list<array<string, mixed>>}&array<string, mixed>  $collection  risposta di `get_all_collection`
      * @param  array<string, list<array{quantity: int, paid_at: string, order: string}>>  $sales  vendite CardTrader per chiave (`CardTraderSales`), usate solo al primo giro
+     * @param  array<string, string>  $sides  lato scelto dall'utente per carta (`CardKey::variantId()` → `pokecardex` o `cardtrader`): al primo giro decide tutta la carta, dopo risolve i conflitti
      */
-    public function plan(User $user, array $collection, array $sales = []): SyncPlan
+    public function plan(User $user, array $collection, array $sales = [], array $sides = []): SyncPlan
     {
         $this->reviews = [];
         $this->pending = [];
@@ -103,9 +104,9 @@ final class SyncPlanner
 
         if ($firstRun) {
             $states
-                ->groupBy(fn (KeyState $state): string => $this->variantId($state->key))
-                ->each(function (Collection $variant) use (&$changes, &$agreed, $sales): void {
-                    [$variantChanges, $variantAgreed] = $this->firstRunVariant($variant->values(), $sales);
+                ->groupBy(fn (KeyState $state): string => $state->key->variantId())
+                ->each(function (Collection $variant, string $variantId) use (&$changes, &$agreed, $sales, $sides): void {
+                    [$variantChanges, $variantAgreed] = $this->firstRunVariant($variant->values(), $sales, $sides[$variantId] ?? null);
                     array_push($agreed, ...$variantAgreed);
 
                     // Le scritture di una carta vanno insieme: togliere la riga
@@ -125,7 +126,11 @@ final class SyncPlanner
                     continue;
                 }
 
-                $direction = $this->direction($state);
+                $direction = $this->direction($state) ?? match ($sides[$state->key->variantId()] ?? null) {
+                    'pokecardex' => PokecardexSyncDirection::ToCardTrader,
+                    'cardtrader' => PokecardexSyncDirection::ToPokecardex,
+                    default => null,
+                };
 
                 if ($direction === null) {
                     $conflicts[] = $state;
@@ -167,13 +172,23 @@ final class SyncPlanner
      * condizioni che Pokecardex ha in eccesso, dalla migliore.
      *
      * @param  Collection<int, KeyState>  $variant
+     *                                              Con un lato scelto dall'utente la carta prende quantità e condizioni di
+     *                                              quel lato, senza vendite.
      * @param  array<string, list<array{quantity: int, paid_at: string, order: string}>>  $sales
      * @return array{0: list<KeyChange>, 1: list<KeyState>}
      */
-    private function firstRunVariant(Collection $variant, array $sales): array
+    private function firstRunVariant(Collection $variant, array $sales, ?string $side = null): array
     {
         if ($variant->every(fn (KeyState $state): bool => $state->pokecardex === $state->cardtrader)) {
             return [[], $variant->all()];
+        }
+
+        if ($side !== null) {
+            $target = $variant->mapWithKeys(fn (KeyState $state): array => [
+                $state->key->id() => $side === 'cardtrader' ? $state->cardtrader : $state->pokecardex,
+            ])->all();
+
+            return $this->changesTowards($variant, $target, []);
         }
 
         $pokecardexTotal = $variant->sum('pokecardex');
@@ -208,6 +223,19 @@ final class SyncPlanner
             }
         }
 
+        return $this->changesTowards($variant, $target, $variantSales);
+    }
+
+    /**
+     * Scritture che portano ogni chiave della carta alla quantità `$target`.
+     *
+     * @param  Collection<int, KeyState>  $variant
+     * @param  array<string, int>  $target
+     * @param  list<array{quantity: int, paid_at: string, order: string}>  $variantSales
+     * @return array{0: list<KeyChange>, 1: list<KeyState>}
+     */
+    private function changesTowards(Collection $variant, array $target, array $variantSales): array
+    {
         $variantTarget = $this->variantTarget($variant);
         $changes = [];
         $agreed = [];
@@ -248,11 +276,6 @@ final class SyncPlanner
             ->unique(fn (array $target): string => $target['id_card'].'|'.$target['id_version']);
 
         return $targets->count() === 1 ? $targets->first() : null;
-    }
-
-    private function variantId(CardKey $key): string
-    {
-        return implode('|', [$key->blueprintId, $key->language->value, (int) $key->reverse, (int) $key->firstEdition]);
     }
 
     private function direction(KeyState $state): ?PokecardexSyncDirection

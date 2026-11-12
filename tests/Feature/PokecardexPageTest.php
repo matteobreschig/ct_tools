@@ -3,10 +3,12 @@
 use App\Filament\Pages\Pokecardex;
 use App\Filament\Resources\PokecardexSeries\Pages\ManagePokecardexSeries;
 use App\Jobs\SyncPokecardex;
+use App\Models\CtExpansionBlueprint;
 use App\Models\Expansion;
 use App\Models\PokecardexAccount;
 use App\Models\PokecardexCard;
 use App\Models\PokecardexCardMatch;
+use App\Models\PokecardexDecision;
 use App\Models\PokecardexSeries;
 use App\Models\PokecardexSeriesRule;
 use App\Models\PokecardexSyncRun;
@@ -134,4 +136,70 @@ it('forgets the matches of a rule when the rule changes', function () {
     $rule->update(['expansion_id' => Expansion::factory()->create()->id]);
 
     expect(PokecardexCardMatch::pluck('id_version')->all())->toBe([1]);
+});
+
+it('saves the side chosen for a card', function () {
+    previewRun($this->user);
+
+    livewire(Pokecardex::class)
+        ->callAction(TestAction::make('chooseSide')->table(0), ['side' => 'cardtrader'])
+        ->assertNotified();
+
+    expect(PokecardexDecision::sole())
+        ->subject->toBe('287733|it|0|0')
+        ->value->toBe('cardtrader');
+
+    livewire(Pokecardex::class)->assertSee('Vince CardTrader');
+});
+
+it('ignores a review and restores it', function () {
+    previewRun($this->user);
+
+    livewire(Pokecardex::class)
+        ->filterTable('section', 'reviews')
+        ->callAction(TestAction::make('ignore')->table(0))
+        ->assertDontSee('Eevee')
+        ->filterTable('section', 'ignored')
+        ->assertSee('Eevee')
+        ->callAction(TestAction::make('restore')->table(0))
+        ->assertDontSee('Eevee');
+
+    expect(PokecardexDecision::count())->toBe(0);
+});
+
+it('matches a Pokecardex row to a blueprint by hand', function () {
+    $run = previewRun($this->user);
+    $plan = $run->plan;
+    $plan['reviews'][0]['payload']['row'] = ['id_collection' => 9, 'id_card' => 26600, 'id_version' => 197, 'id_etat' => 6, 'id_langue' => 2, 'quantite' => 1];
+    $run->update(['plan' => $plan]);
+    $blueprint = CtExpansionBlueprint::factory()->create(['name' => 'Eevee']);
+
+    livewire(Pokecardex::class)
+        ->filterTable('section', 'reviews')
+        ->callAction(TestAction::make('matchBlueprint')->table(0), ['blueprint_id' => $blueprint->blueprint_id])
+        ->assertNotified();
+
+    expect(PokecardexCardMatch::sole())
+        ->id_card->toBe(26600)
+        ->id_version->toBe(197)
+        ->blueprint_id->toBe($blueprint->blueprint_id)
+        ->source->toBe('manual');
+});
+
+it('matches a CardTrader listing to a Pokecardex card by hand', function () {
+    $run = previewRun($this->user);
+    $plan = $run->plan;
+    $plan['reviews'] = [['kind' => 'no_target', 'message' => 'Nessuna carta.', 'payload' => ['key' => ['blueprint_id' => 4242, 'condition' => 'nm', 'language' => 'it', 'reverse' => true, 'first_edition' => false]]]];
+    $run->update(['plan' => $plan]);
+    $card = PokecardexCard::factory()->create(['name_en' => 'Pikachu']);
+
+    livewire(Pokecardex::class)
+        ->filterTable('section', 'reviews')
+        ->callAction(TestAction::make('matchCard')->table(0), ['id_card' => $card->id_card, 'id_version' => 2])
+        ->assertNotified();
+
+    expect(PokecardexCardMatch::sole())
+        ->id_card->toBe($card->id_card)
+        ->id_version->toBe(2)
+        ->blueprint_id->toBe(4242);
 });

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Exceptions\PokecardexException;
+use App\Models\PokecardexDecision;
 use App\Models\PokecardexSeries;
 use App\Models\PokecardexSyncRun;
 use App\Models\PokecardexSyncState;
@@ -82,7 +83,7 @@ class SyncPokecardex implements ShouldBeUnique, ShouldQueue
             $sales = $firstRun ? (new CardTraderSales($cardtraderClient))->soldByKey() : [];
 
             $plan = (new SyncPlanner(new CardMatcher($catalog, new BlueprintCatalog($cardtraderClient))))
-                ->plan($this->user, $collection, $sales);
+                ->plan($this->user, $collection, $sales, PokecardexDecision::sidesFor($this->user));
 
             $run->fill([
                 'pokecardex_copies' => $plan->pokecardexCopies,
@@ -117,6 +118,10 @@ class SyncPokecardex implements ShouldBeUnique, ShouldQueue
             }
 
             if (! $result->failed()) {
+                // Le scelte di lato valgono per un giro: dopo le scritture la
+                // base concordata ne tiene già conto.
+                PokecardexDecision::query()->where('user_id', $this->user->id)->where('kind', PokecardexDecision::SIDE)->delete();
+
                 $copies = $plan->copiesAfter();
                 $run->fill(['pokecardex_copies' => $copies['pokecardex'], 'cardtrader_copies' => $copies['cardtrader']]);
             }

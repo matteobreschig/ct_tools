@@ -6,6 +6,7 @@ use App\Models\CtExpansionBlueprint;
 use App\Models\Expansion;
 use App\Models\PokecardexAccount;
 use App\Models\PokecardexCard;
+use App\Models\PokecardexDecision;
 use App\Models\PokecardexSeries;
 use App\Models\PokecardexSyncRun;
 use App\Models\PokecardexSyncState;
@@ -50,6 +51,9 @@ function fakeBothSites(int ...$pokecardexCopies): void
 
     Http::fake([
         'www.pokecardex.com/api/collection/get_all_collection' => $collections,
+        'www.pokecardex.com/api/collection/get_carte_details' => Http::response(jobEncrypted(['collection' => [
+            ['id_collection' => 101, 'quantite' => 3, 'id_card' => 26600, 'id_version' => 1, 'id_langue' => 4, 'id_etat' => 6, 'prix_achat' => null, 'date_achat' => null, 'note' => null],
+        ]])),
         'www.pokecardex.com/api/collection/*' => Http::response(null, 204),
         'www.pokecardex.com/' => Http::response('<meta name="csrf-token" content="t">'),
         'api.cardtrader.com/api/v2/orders*' => Http::response([]),
@@ -147,4 +151,20 @@ it('fails without Pokecardex credentials', function () {
 
     expect(PokecardexSyncRun::sole()->outcome)->toBe('failed')
         ->and(PokecardexSyncRun::sole()->message)->toContain('Credenziali');
+});
+
+it('uses the side chosen by the user and forgets it once written', function () {
+    fakeBothSites(3, 3);
+    PokecardexDecision::create(['user_id' => $this->user->id, 'kind' => 'side', 'subject' => '287733|it|0|0', 'value' => 'cardtrader']);
+    SyncPokecardex::dispatchSync($this->user);
+    $preview = PokecardexSyncRun::sole();
+
+    expect($preview->plan['changes'][0]['direction'])->toBe('to_pokecardex')
+        ->and($preview->plan['changes'][0]['after'])->toBe(1);
+
+    SyncPokecardex::dispatchSync($this->user, $preview->id);
+
+    expect(PokecardexSyncRun::latest('id')->first()->outcome)->toBe('applied')
+        ->and(PokecardexDecision::count())->toBe(0);
+    Http::assertSent(fn (Request $request) => str_ends_with($request->url(), 'update_carte_collection') && $request['quantite'] == 1);
 });
