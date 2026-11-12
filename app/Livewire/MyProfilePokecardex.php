@@ -62,7 +62,8 @@ class MyProfilePokecardex extends MyProfileComponent
             $attributes['password'] = $state['password'];
         }
 
-        $this->user->pokecardexAccount()->updateOrCreate([], $attributes);
+        $account = $this->user->pokecardexAccount ?? $this->user->pokecardexAccount()->make();
+        $account->fillCredentials($attributes)->save();
         $this->user->unsetRelation('pokecardexAccount');
 
         $this->form->fill(['username' => $state['username']]);

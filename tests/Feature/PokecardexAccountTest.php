@@ -58,6 +58,26 @@ it('keeps the saved password when the field is left empty', function () {
         ->and($account->password)->toBe('old-secret');
 });
 
+it('forgets the saved session and the rejection when credentials change', function () {
+    PokecardexAccount::factory()->for($this->user)->create([
+        'username' => 'ash',
+        'password' => 'wrong-secret',
+        'session_cookies' => [['Name' => 'CardexCookie_sid', 'Value' => 'old']],
+        'credentials_rejected_at' => now(),
+    ]);
+
+    livewire(MyProfilePokecardex::class)
+        ->fillForm(['username' => 'ash', 'password' => 'right-secret'])
+        ->call('submit')
+        ->assertHasNoFormErrors();
+
+    $account = $this->user->fresh()->pokecardexAccount;
+
+    expect($account->credentials_rejected_at)->toBeNull()
+        ->and($account->session_cookies)->toBeNull()
+        ->and($account->password)->toBe('right-secret');
+});
+
 it('removes the credentials', function () {
     PokecardexAccount::factory()->for($this->user)->create();
 
