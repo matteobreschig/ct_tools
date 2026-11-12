@@ -104,4 +104,14 @@ class PokecardexCard extends Model
 
         return $digits === '' ? null : $digits;
     }
+
+    /**
+     * Nome confrontabile tra i due siti: solo lettere e cifre, minuscole.
+     * "Professor's Research - Professor Sada" e "Professor's Research
+     * Professor Sada" → "professorsresearchprofessorsada".
+     */
+    public static function normalizeName(?string $name): string
+    {
+        return preg_replace('/[^a-z0-9]/', '', mb_strtolower((string) $name));
+    }
 }

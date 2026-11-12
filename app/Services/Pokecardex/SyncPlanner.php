@@ -7,6 +7,7 @@ use App\Enums\PokecardexMatchStatus;
 use App\Enums\PokecardexSyncDirection;
 use App\Models\Expansion;
 use App\Models\PokecardexCard;
+use App\Models\PokecardexSeries;
 use App\Models\PokecardexSyncState;
 use App\Models\Product;
 use App\Models\User;
@@ -403,10 +404,17 @@ final class SyncPlanner
     {
         $keys = [];
         $cards = PokecardexCard::query()->whereIn('id_card', $rows->pluck('idCard')->unique())->get()->keyBy('id_card');
+        $ignoredSeries = PokecardexSeries::query()->where('ignored', true)->pluck('id_serie')->flip();
 
         foreach ($rows as $row) {
             $payload = ['row' => $row->toArray()];
             $card = $cards[$row->idCard] ?? null;
+
+            // Serie ignorata dall'utente (non esiste su CardTrader): fuori dal
+            // confronto, senza revisioni.
+            if ($card !== null && isset($ignoredSeries[$card->id_serie])) {
+                continue;
+            }
 
             if ($card === null) {
                 $this->reviews[] = new ReviewItem('unmatched', 'Carta assente dal catalogo Pokecardex locale.', $payload);

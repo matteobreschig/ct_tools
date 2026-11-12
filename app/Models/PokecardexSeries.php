@@ -11,7 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * Serie Pokecardex (catalogo condiviso tra gli utenti) con l'espansione
  * CardTrader corrispondente. `expansion_source`: `auto` se trovata per nome o
- * codice, `manual` se scelta dall'utente.
+ * codice, `manual` se scelta dall'utente. `ignored`: serie che non esiste su
+ * CardTrader (es. Topps); le sue righe restano fuori dalla sincronizzazione.
  */
 class PokecardexSeries extends Model
 {
@@ -30,6 +31,7 @@ class PokecardexSeries extends Model
         'id_cardmarket',
         'expansion_id',
         'expansion_source',
+        'ignored',
         'cards_loaded_at',
     ];
 
@@ -37,6 +39,7 @@ class PokecardexSeries extends Model
     {
         return [
             'cards_loaded_at' => 'datetime',
+            'ignored' => 'boolean',
         ];
     }
 

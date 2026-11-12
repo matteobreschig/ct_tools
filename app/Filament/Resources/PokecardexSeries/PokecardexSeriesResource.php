@@ -9,9 +9,11 @@ use BackedEnum;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
@@ -43,6 +45,10 @@ class PokecardexSeriesResource extends Resource
     {
         return $schema
             ->components([
+                Toggle::make('ignored')
+                    ->label('Ignora la serie')
+                    ->helperText('Per le serie che non esistono su CardTrader: le loro carte restano fuori dalla sincronizzazione.')
+                    ->columnSpanFull(),
                 Select::make('expansion_id')
                     ->label('Espansione CardTrader')
                     ->options(fn (): array => self::expansionOptions())
@@ -90,6 +96,12 @@ class PokecardexSeriesResource extends Resource
                     ->label('Espansione CardTrader')
                     ->description(fn (PokecardexSeries $record): ?string => $record->expansion?->code)
                     ->placeholder('Non abbinata'),
+                IconColumn::make('ignored')
+                    ->label('Ignorata')
+                    ->boolean()
+                    ->trueIcon(Heroicon::OutlinedEyeSlash)
+                    ->falseIcon(null)
+                    ->trueColor('gray'),
                 TextColumn::make('expansion_source')
                     ->label('Abbinata')
                     ->badge()

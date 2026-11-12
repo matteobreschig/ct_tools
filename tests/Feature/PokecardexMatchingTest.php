@@ -300,3 +300,87 @@ it('keeps a single blueprint even if its variant label differs from the Pokecard
     $target = $this->matcher->matchBlueprint($special->blueprint_id, $pokeBall, reverse: true, firstEdition: false);
     expect([$target->idCard, $target->idVersion])->toBe([$card->id_card, 94]);
 });
+
+function prizePackEnergySetup(): array
+{
+    $prizePack = Expansion::factory()->create(['code' => 'playprizep', 'blueprints_loaded_at' => now()]);
+    $series = PokecardexSeries::factory()->create(['code' => 'PRZP', 'cards_loaded_at' => now()]);
+    foreach ([144, 147] as $version) {
+        PokecardexSeriesRule::create(['id_serie' => $series->id_serie, 'id_version' => $version, 'expansion_id' => $prizePack->id]);
+    }
+
+    return [$prizePack, $series];
+}
+
+function prizePackEnergyCard(PokecardexSeries $series, string $number, int $cardmarketId, string $name = 'Basic Grass Energy'): PokecardexCard
+{
+    return PokecardexCard::factory()->create([
+        'id_serie' => $series->id_serie, 'num_card' => $number, 'name_en' => $name, 'id_cardmarket' => $cardmarketId,
+        'versions' => [
+            ['id_version' => 144, 'nom_version_us' => 'Non Holo (PPS)', 'langues' => [2, 4]],
+            ['id_version' => 147, 'nom_version_us' => 'Cosmos Holo (PPS)', 'langues' => [2, 4]],
+        ],
+    ]);
+}
+
+it('maps Prize Pack Cosmos energies to reverse on the same blueprint when there is no Cosmos twin', function () {
+    [$prizePack, $series] = prizePackEnergySetup();
+    $card = prizePackEnergyCard($series, '014', 811093, 'Fighting Energy (2024)');
+    $blueprint = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Basic Fighting Energy', 'collector_number' => '014', 'version' => 'SVE 014', 'cardmarket_product_id' => 811093]);
+
+    $nonHolo = $this->matcher->match($card, 144);
+    $cosmos = $this->matcher->match($card, 147);
+
+    expect([$nonHolo->blueprintId, $nonHolo->reverse])->toBe([$blueprint->blueprint_id, false])
+        ->and([$cosmos->blueprintId, $cosmos->reverse])->toBe([$blueprint->blueprint_id, true]);
+
+    PokecardexCardMatch::query()->delete();
+
+    expect($this->matcher->matchBlueprint($blueprint->blueprint_id, $prizePack, reverse: true, firstEdition: false)->idVersion)->toBe(147)
+        ->and($this->matcher->matchBlueprint($blueprint->blueprint_id, $prizePack, reverse: false, firstEdition: false)->idVersion)->toBe(144);
+});
+
+it('maps Prize Pack Cosmos energies to the Reverse Cosmos Holo twin', function () {
+    [$prizePack, $series] = prizePackEnergySetup();
+    $card = prizePackEnergyCard($series, 'MEE001', 864332);
+    $plain = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Basic Grass Energy', 'collector_number' => '001', 'version' => 'MEE 001', 'cardmarket_product_id' => 864332]);
+    CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Basic Grass Energy', 'collector_number' => '001', 'version' => 'Non-Holo / Reverse Holo', 'cardmarket_product_id' => 827289]);
+    $reverseCosmos = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Basic Grass Energy', 'collector_number' => '001', 'version' => 'Reverse Cosmos Holo | MEE 001', 'cardmarket_product_id' => 894235]);
+
+    $nonHolo = $this->matcher->match($card, 144);
+    $cosmos = $this->matcher->match($card, 147);
+
+    expect([$nonHolo->blueprintId, $nonHolo->reverse])->toBe([$plain->blueprint_id, false])
+        ->and([$cosmos->blueprintId, $cosmos->reverse])->toBe([$reverseCosmos->blueprint_id, true]);
+
+    PokecardexCardMatch::query()->delete();
+
+    $back = $this->matcher->matchBlueprint($reverseCosmos->blueprint_id, $prizePack, reverse: true, firstEdition: false);
+    expect([$back->idCard, $back->idVersion])->toBe([$card->id_card, 147]);
+});
+
+it('finds Theme Deck Exclusives by number digits and name in a mixed expansion', function () {
+    $deck = Expansion::factory()->create(['code' => 'deckexclusives', 'blueprints_loaded_at' => now()]);
+    PokecardexSeriesRule::create(['id_serie' => $this->series->id_serie, 'id_version' => 48, 'expansion_id' => $deck->id]);
+    $card = twmCard(['num_card' => '189/198', 'name_en' => "Professor's Research Professor Sada", 'versions' => [['id_version' => 48, 'nom_version_us' => 'Non Holo', 'langues' => [2, 4]]]]);
+    CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $deck->ct_id, 'name' => 'Miraidon', 'collector_number' => '189', 'cardmarket_product_id' => 1]);
+    $sada = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $deck->ct_id, 'name' => "Professor's Research - Professor Sada", 'collector_number' => '189nh', 'version' => 'Non-Holo | 189/198', 'cardmarket_product_id' => 2]);
+
+    $match = $this->matcher->match($card, 48);
+
+    expect([$match->status, $match->blueprintId, $match->reverse])->toBe([PokecardexMatchStatus::Matched, $sada->blueprint_id, false]);
+
+    PokecardexCardMatch::query()->delete();
+
+    $back = $this->matcher->matchBlueprint($sada->blueprint_id, $deck, reverse: false, firstEdition: false);
+    expect([$back->idCard, $back->idVersion])->toBe([$card->id_card, 48]);
+});
+
+it('does not trust a Cardmarket id that points to another number and name in a rule expansion', function () {
+    [$prizePack, $series] = prizePackEnergySetup();
+    $lunatone = prizePackEnergyCard($series, '074/132', 864380, 'Lunatone');
+    CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Latios', 'collector_number' => '101', 'cardmarket_product_id' => 864380]);
+    $right = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Lunatone', 'collector_number' => '074', 'cardmarket_product_id' => 811175]);
+
+    expect($this->matcher->match($lunatone, 144)->blueprintId)->toBe($right->blueprint_id);
+});

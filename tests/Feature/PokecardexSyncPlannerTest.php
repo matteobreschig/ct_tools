@@ -405,3 +405,16 @@ it('resolves a conflict with the side the user chose', function (string $side, s
     'Pokecardex' => ['pokecardex', 'to_cardtrader:nm:1>3'],
     'CardTrader' => ['cardtrader', 'to_pokecardex:nm:3>1'],
 ]);
+
+it('leaves out the rows of an ignored series', function () {
+    $topps = PokecardexSeries::factory()->create(['code' => 'TOPPS', 'ignored' => true]);
+    PokecardexCard::factory()->create(['id_card' => 99001, 'id_serie' => $topps->id_serie]);
+
+    $plan = $this->planner->plan($this->user, ['cartes' => [], 'collection' => [
+        ['id_collection' => 1, 'id_card' => 99001, 'id_version' => 1, 'id_etat' => 6, 'id_langue' => 4, 'quantite' => 2],
+    ]]);
+
+    expect($plan->changes)->toBeEmpty()
+        ->and($plan->reviews)->toBeEmpty()
+        ->and($plan->pokecardexCopies)->toBe(2);
+});
