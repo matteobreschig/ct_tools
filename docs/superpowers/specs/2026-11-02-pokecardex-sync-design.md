@@ -482,9 +482,19 @@ stato dell'ultimo giro (si aggiorna da solo mentre il giro è in corso), bottoni
 Scritture, Da rivedere e In attesa (filtro "Lato" per le scritture), storico degli ultimi dieci
 giri. Risorsa "Serie Pokecardex": abbinamento a mano di una serie a un'espansione CardTrader e
 regole delle versioni speciali; cambiare o togliere una regola cancella gli abbinamenti nati da
-lei. **Non ancora fatti:** invertire il verso di una scrittura nell'anteprima, scegliere a mano il
-blueprint di una carta, scegliere il lato in un conflitto, ignorare per sempre una revisione. Il
-giro gira in coda: serve un worker attivo (`php artisan queue:work` o Horizon).
+lei.
+
+Azioni sulle righe (`pokecardex_decisions`, completate il 2026-11-12):
+- **Scegli lato** (scritture e conflitti): "Vince Pokecardex" o "Vince CardTrader" per tutta la carta
+  (blueprint, lingua, reverse, prima edizione, ogni condizione). Al primo giro la carta prende
+  quantità e condizioni del lato scelto, senza vendite; dopo risolve i conflitti. Vale dal giro
+  successivo (serve una nuova anteprima) e si consuma quando il giro scrive;
+- **Abbina**: una riga Pokecardex a un blueprint CardTrader, oppure un'inserzione CardTrader a una
+  carta e versione Pokecardex; salva un abbinamento manuale, che vince sempre;
+- **Ignora** / **Ripristina**: una revisione sparisce da "Da rivedere" e compare in "Ignorate";
+  l'impronta usa tipo e riga o chiave, non il testo del messaggio.
+
+Il giro gira in coda: serve un worker attivo (`php artisan queue:work` o Horizon).
 
 ### 8.2 Profilo
 
