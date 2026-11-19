@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Exceptions\PokecardexException;
 use App\Models\PokecardexDecision;
-use App\Models\PokecardexSeries;
 use App\Models\PokecardexSyncRun;
 use App\Models\PokecardexSyncState;
 use App\Models\User;
@@ -24,6 +23,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 /**
@@ -51,6 +51,20 @@ class SyncPokecardex implements ShouldBeUnique, ShouldQueue
 
     public int $uniqueFor = 3600;
 
+    /**
+     * Segno in cache dell'ultimo aggiornamento dell'elenco serie. Le date delle
+     * righe non bastano: una serie importata o abbinata a mano oggi farebbe
+     * saltare l'aggiornamento di tutte le altre.
+     */
+    public const SERIES_REFRESHED_KEY = 'pokecardex:series-refreshed';
+
+    /**
+     * Memoria minima per un giro. Rilettura delle inserzioni, collezione,
+     * cataloghi e piano stanno insieme in memoria: con i 128 MB predefiniti
+     * dell'immagine PHP il primo giro in produzione è morto nel piano.
+     */
+    public const MEMORY_LIMIT = '512M';
+
     public function __construct(public User $user, public ?int $approvedRunId = null) {}
 
     public function uniqueId(): string
@@ -60,6 +74,8 @@ class SyncPokecardex implements ShouldBeUnique, ShouldQueue
 
     public function handle(CardTraderInventory $inventory): void
     {
+        $this->raiseMemoryLimit();
+
         $run = PokecardexSyncRun::create(['user_id' => $this->user->id, 'started_at' => now()]);
 
         try {
@@ -72,8 +88,9 @@ class SyncPokecardex implements ShouldBeUnique, ShouldQueue
             $pokecardexClient = new PokecardexClient($account);
             $catalog = new PokecardexCatalog($pokecardexClient);
 
-            if (PokecardexSeries::query()->where('updated_at', '>', now()->subDay())->doesntExist()) {
+            if (! Cache::has(self::SERIES_REFRESHED_KEY)) {
                 $catalog->refreshSeries();
+                Cache::put(self::SERIES_REFRESHED_KEY, now()->toIso8601String(), now()->addDay());
             }
 
             $collection = $pokecardexClient->collection();
@@ -134,6 +151,53 @@ class SyncPokecardex implements ShouldBeUnique, ShouldQueue
         } catch (Throwable $exception) {
             $this->finish($run, 'failed', $exception->getMessage());
         }
+    }
+
+    /**
+     * Il job è morto fuori da handle() (tempo scaduto, errore fatale): chiude il
+     * giro rimasto aperto, che altrimenti resterebbe "in corso".
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $run = PokecardexSyncRun::query()
+            ->where('user_id', $this->user->id)
+            ->whereNull('finished_at')
+            ->latest('id')
+            ->first();
+
+        if ($run !== null) {
+            $this->finish($run, 'failed', 'Il giro si è interrotto: '.($exception?->getMessage() ?: 'motivo sconosciuto'));
+        }
+    }
+
+    /**
+     * Alza il limite di memoria a MEMORY_LIMIT, mai lo abbassa (né toglie
+     * "senza limite").
+     */
+    private function raiseMemoryLimit(): void
+    {
+        $current = (string) ini_get('memory_limit');
+
+        if ($current === '-1' || self::bytes($current) >= self::bytes(self::MEMORY_LIMIT)) {
+            return;
+        }
+
+        ini_set('memory_limit', self::MEMORY_LIMIT);
+    }
+
+    /**
+     * Valore di php.ini come "128M" o "1G" in byte.
+     */
+    private static function bytes(string $value): int
+    {
+        $number = (int) $value;
+
+        return match (strtolower(substr(trim($value), -1))) {
+            'g' => $number * 1024 ** 3,
+            'm' => $number * 1024 ** 2,
+            'k' => $number * 1024,
+            default => $number,
+        };
     }
 
     private function isApproved(string $fingerprint): bool
