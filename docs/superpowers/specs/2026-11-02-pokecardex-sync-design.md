@@ -596,6 +596,11 @@ non l'ha dato per perso dopo 2400 secondi. Correzioni: il giro alza il proprio l
 (`failed()`), e aggiorna l'elenco serie una volta al giorno con un segno in cache invece che
 dalle date delle righe, che lo script SQL aveva appena scritto.
 
+Secondo tentativo (2026-11-19): il worker che applicava l'anteprima è sparito dopo pochi minuti
+senza log. Non era memoria: l'autoscaling di Horizon, riducendo i worker, ferma i più vecchi
+anche se lavorano e li uccide dopo il `timeout` del supervisore, che era 60 secondi. Ora è 1900:
+sopra i 1800 di `SyncPokecardex`, sotto i 2400 di `REDIS_QUEUE_RETRY_AFTER`.
+
 ## 11. Rischi
 
 - API interna di Pokecardex: percorsi, cifratura e chiave possono cambiare. I freni del § 7

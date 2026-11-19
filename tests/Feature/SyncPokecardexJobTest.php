@@ -2,6 +2,7 @@
 
 use App\Jobs\ApplyDynamicSale;
 use App\Jobs\SyncPokecardex;
+use App\Jobs\SyncProducts;
 use App\Models\CtExpansionBlueprint;
 use App\Models\Expansion;
 use App\Models\PokecardexAccount;
@@ -184,6 +185,14 @@ it('raises a low memory limit for the run and never lowers a higher one', functi
     'higher limit' => ['1G', '1G'],
     'no limit' => ['-1', '-1'],
 ]);
+
+it('gives Horizon workers more time than the longest job before killing them', function () {
+    $supervisorTimeout = config('horizon.defaults.supervisor-1.timeout');
+
+    expect($supervisorTimeout)->toBeGreaterThan((new SyncPokecardex($this->user))->timeout)
+        ->and($supervisorTimeout)->toBeGreaterThan((new SyncProducts($this->user))->timeout)
+        ->and($supervisorTimeout)->toBeLessThan(2400);
+});
 
 it('fails without Pokecardex credentials', function () {
     $this->user->pokecardexAccount->delete();

@@ -207,7 +207,11 @@ return [
             'maxJobs' => 0,
             'memory' => 128,
             'tries' => 1,
-            'timeout' => 60,
+            // Quando l'autoscaling riduce i worker, Horizon ferma i più vecchi
+            // anche se stanno lavorando e li uccide dopo `timeout` secondi.
+            // Deve superare il job più lungo (SyncPokecardex: 1800s) e restare
+            // sotto REDIS_QUEUE_RETRY_AFTER (2400s nel docker-compose).
+            'timeout' => 1900,
             'nice' => 0,
         ],
     ],
