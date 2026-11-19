@@ -237,6 +237,12 @@ class PokecardexClient
             ->withHeaders([
                 'X-CSRF-TOKEN' => $this->csrfToken(),
                 'X-Requested-With' => 'XMLHttpRequest',
+                'Accept' => 'application/json, text/plain, */*',
+                'Origin' => self::BASE_URL,
+                'Referer' => self::BASE_URL.'/',
+                'Sec-Fetch-Site' => 'same-origin',
+                'Sec-Fetch-Mode' => 'cors',
+                'Sec-Fetch-Dest' => 'empty',
             ])
             ->post("/api/collection/{$action}", ['lang' => 'en', ...$parameters]));
     }
