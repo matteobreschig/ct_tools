@@ -130,8 +130,10 @@ final class CardMatcher
 
         $blueprint = $candidates->first();
         $blueprintNumber = PokecardexCard::normalizeCollectorNumber($blueprint->collector_number);
+        $blueprintDigits = PokecardexCard::collectorDigits($blueprint->collector_number);
 
-        if ($blueprintNumber !== $card->collectorNumber()) {
+        // Contano le sole cifre: CardTrader scrive "PAL 203" o "104e" dove Pokecardex ha "203/193" o "104/109".
+        if ($blueprintDigits === null || $blueprintDigits !== PokecardexCard::collectorDigits($card->num_card)) {
             return CardMatch::review("L'ID Cardmarket porta a un blueprint con numero diverso ({$blueprintNumber} invece di {$card->collectorNumber()}).");
         }
 

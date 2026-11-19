@@ -93,6 +93,19 @@ it('sends to review a Cardmarket id that lands on a different collector number',
     expect(PokecardexCardMatch::count())->toBe(0);
 });
 
+it('trusts a Cardmarket id whose blueprint number has a prefix or suffix around the same digits', function (string $pokecardexNumber, string $cardtraderNumber) {
+    $card = twmCard(['num_card' => $pokecardexNumber]);
+    $blueprint = twmBlueprint(['collector_number' => $cardtraderNumber]);
+
+    $match = $this->matcher->match($card, 1);
+
+    expect($match->status)->toBe(PokecardexMatchStatus::Matched)
+        ->and($match->blueprintId)->toBe($blueprint->blueprint_id);
+})->with([
+    'stamped reprint' => ['203/193', 'PAL 203'],
+    'energy' => ['104/109', '104e'],
+]);
+
 it('sends to review a Cardmarket id shared by more blueprints', function () {
     $card = twmCard();
     twmBlueprint();
