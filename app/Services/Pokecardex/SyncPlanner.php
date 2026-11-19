@@ -8,6 +8,7 @@ use App\Enums\PokecardexSyncDirection;
 use App\Models\Expansion;
 use App\Models\PokecardexCard;
 use App\Models\PokecardexSeries;
+use App\Models\PokecardexSyncRun;
 use App\Models\PokecardexSyncState;
 use App\Models\Product;
 use App\Models\User;
@@ -77,12 +78,14 @@ final class SyncPlanner
         $products = Product::query()->where('user_id', $user->id)->whereNotNull('blueprint_id')->get();
         $cardtraderKeys = $this->cardtraderKeys($products);
 
-        $bases = PokecardexSyncState::query()
+        $firstRun = PokecardexSyncRun::isFirstRunFor($user);
+
+        // Al primo giro una base rimasta da un tentativo interrotto non conta:
+        // il piano riparte dai due siti com'erano adesso.
+        $bases = $firstRun ? collect() : PokecardexSyncState::query()
             ->where('user_id', $user->id)
             ->get()
             ->keyBy(fn (PokecardexSyncState $state): string => $state->key()->id());
-
-        $firstRun = $bases->isEmpty();
         $changes = [];
         $agreed = [];
         $conflicts = [];

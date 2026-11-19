@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Exceptions\PokecardexException;
 use App\Models\PokecardexDecision;
 use App\Models\PokecardexSyncRun;
-use App\Models\PokecardexSyncState;
 use App\Models\User;
 use App\Services\CTApiClient;
 use App\Services\Pokecardex\BlueprintCatalog;
@@ -104,7 +103,7 @@ class SyncPokecardex implements ShouldBeUnique, ShouldQueue
             $collection = $pokecardexClient->collection();
             $catalog->remember($collection['cartes']);
 
-            $firstRun = PokecardexSyncState::query()->where('user_id', $this->user->id)->doesntExist();
+            $firstRun = PokecardexSyncRun::isFirstRunFor($this->user);
             $sales = $firstRun ? (new CardTraderSales($cardtraderClient))->soldByKey() : [];
 
             $plan = (new SyncPlanner(new CardMatcher($catalog, new BlueprintCatalog($cardtraderClient))))

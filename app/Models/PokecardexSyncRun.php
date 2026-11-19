@@ -33,4 +33,15 @@ class PokecardexSyncRun extends Model
             'plan' => 'array',
         ];
     }
+
+    /**
+     * Primo giro finché nessun giro dell'utente è arrivato in fondo alle
+     * scritture. La base da sola non basta: un primo giro interrotto a metà
+     * ne lascia una parte, e il giro dopo perderebbe le regole del primo
+     * (condizioni da CardTrader, copie vendute, scelte di lato).
+     */
+    public static function isFirstRunFor(User $user): bool
+    {
+        return self::query()->where('user_id', $user->id)->where('outcome', 'applied')->doesntExist();
+    }
 }

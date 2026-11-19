@@ -70,6 +70,15 @@ it('adds before it removes within a card', function () {
         ->and(PokecardexSyncState::where('condition', 'sp')->value('quantity'))->toBe(1);
 });
 
+it('rewrites the base from scratch on a first run', function () {
+    PokecardexSyncState::create(['user_id' => $this->user->id, ...applierKey('nm', 999)->attributes(), 'quantity' => 4]);
+    $agreed = new KeyState(applierKey('nm', 287733), pokecardex: 2, cardtrader: 2, base: null);
+
+    $this->applier->apply($this->user, new SyncPlan(true, [], [$agreed], [], [], [], 2, 2));
+
+    expect(PokecardexSyncState::query()->pluck('quantity', 'blueprint_id')->all())->toBe([287733 => 2]);
+});
+
 it('stops at the first failed write and leaves that card base untouched', function () {
     $this->cardtrader->shouldReceive('write')->andThrow(new RuntimeException('HTTP 500'));
     PokecardexSyncState::create(['user_id' => $this->user->id, ...applierKey('nm', 1)->attributes(), 'quantity' => 1]);

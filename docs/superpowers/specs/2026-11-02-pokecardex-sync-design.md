@@ -607,6 +607,11 @@ un'eccezione; il giro ne fa centinaia di fila, e il controllo prezzi orario inta
 comune. Ora il client accetta un'attesa massima: il giro e la sua rilettura delle inserzioni
 aspettano fino a 120 secondi per chiamata, gli altri job restano come prima.
 
+Quel tentativo aveva già salvato parte della base. Il primo giro si riconosceva dalla base vuota,
+quindi il giro dopo avrebbe perso le regole del primo e trattato ogni differenza come una
+novità. Ora è primo giro finché nessun giro è `applied`; al primo giro la base esistente non
+conta e l'applicazione la riscrive da zero.
+
 ## 11. Rischi
 
 - API interna di Pokecardex: percorsi, cifratura e chiave possono cambiare. I freni del § 7
