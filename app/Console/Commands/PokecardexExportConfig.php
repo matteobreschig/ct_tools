@@ -8,6 +8,7 @@ use App\Models\PokecardexDecision;
 use App\Models\PokecardexSeries;
 use App\Models\PokecardexSeriesRule;
 use App\Models\User;
+use App\Services\Pokecardex\ConfigSqlScript;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 
@@ -24,7 +25,9 @@ class PokecardexExportConfig extends Command
 
     protected $signature = 'pokecardex:export-config
         {email : Email dell\'utente di cui esportare le decisioni}
-        {path? : File di destinazione (predefinito storage/app/pokecardex-config.json)}';
+        {path? : File di destinazione (predefinito storage/app/pokecardex-config.json, o .sql con --sql)}
+        {--sql : Scrive uno script SQL (MySQL o MariaDB) da eseguire sul database di destinazione}
+        {--target-email= : Con --sql, email dell\'utente di destinazione (predefinita: la stessa)}';
 
     protected $description = 'Esporta regole, serie, abbinamenti manuali e decisioni della sincronizzazione Pokecardex';
 
@@ -89,17 +92,21 @@ class PokecardexExportConfig extends Command
                 'value' => $decision->value,
             ]);
 
-        $path = $this->argument('path') ?? storage_path('app/pokecardex-config.json');
-
-        File::ensureDirectoryExists(dirname($path));
-        File::put($path, json_encode([
+        $config = [
             'format' => self::FORMAT,
             'exported_at' => now()->toIso8601String(),
             'series' => $series->all(),
             'rules' => $rules->all(),
             'manual_matches' => $manualMatches->all(),
             'decisions' => $decisions->all(),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        ];
+
+        $path = $this->argument('path') ?? storage_path('app/pokecardex-config.'.($this->option('sql') ? 'sql' : 'json'));
+
+        File::ensureDirectoryExists(dirname($path));
+        File::put($path, $this->option('sql')
+            ? (new ConfigSqlScript)->build($config, $this->option('target-email') ?? $user->email)
+            : json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
         $this->info("Configurazione esportata in {$path}");
         $this->table(['Cosa', 'Righe'], [

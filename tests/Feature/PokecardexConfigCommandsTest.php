@@ -115,6 +115,25 @@ it('writes nothing when an expansion is missing in production', function () {
         ->and(PokecardexDecision::count())->toBe(0);
 });
 
+it('writes a SQL script that finds expansions and the user by their stable keys', function () {
+    $this->artisan('pokecardex:export-config', ['email' => 'seller@example.test', 'path' => $this->path, '--sql' => true, '--target-email' => "o'wner@example.test"])->assertSuccessful();
+
+    $sql = File::get($this->path);
+
+    expect($sql)
+        ->toContain("INSERT INTO pokecardex_import_check VALUES ('utente o''wner@example.test', (SELECT id FROM users WHERE email = 'o''wner@example.test'));")
+        ->toContain("INSERT INTO pokecardex_import_check VALUES ('espansione playprizep (3001)', (SELECT id FROM expansions WHERE ct_id = 3001));")
+        ->toContain("INSERT INTO pokecardex_import_check VALUES ('espansione svpromo (3002)', (SELECT id FROM expansions WHERE ct_id = 3002));")
+        ->toContain("VALUES (206, 'en', 'PRZP'")
+        ->toContain("(SELECT id FROM expansions WHERE ct_id = 3001), 'manual', 0, NOW(), NOW()) ON DUPLICATE KEY UPDATE expansion_id = VALUES(expansion_id)")
+        ->toContain('VALUES (240, 94, (SELECT id FROM expansions WHERE ct_id = 3002), NOW(), NOW())')
+        ->toContain("VALUES (26633, 1, 413214, 'manual', NOW(), NOW())")
+        ->toContain("VALUES ((SELECT id FROM users WHERE email = 'o''wner@example.test'), 'side', '389952|it|0|0', 'cardtrader', NOW(), NOW())")
+        ->not->toContain('ct_id = 3003')
+        ->and(strpos($sql, 'pokecardex_import_check VALUES'))->toBeLessThan(strpos($sql, 'START TRANSACTION;'))
+        ->and(strpos($sql, 'START TRANSACTION;'))->toBeLessThan(strpos($sql, 'COMMIT;'));
+});
+
 it('fails for an unknown user', function () {
     $this->artisan('pokecardex:export-config', ['email' => 'nobody@example.test', 'path' => $this->path])->assertFailed();
 });
