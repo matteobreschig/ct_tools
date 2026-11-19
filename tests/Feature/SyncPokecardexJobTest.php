@@ -54,6 +54,9 @@ function fakeBothSites(int ...$pokecardexCopies): void
         'www.pokecardex.com/api/collection/get_carte_details' => Http::response(jobEncrypted(['collection' => [
             ['id_collection' => 101, 'quantite' => 3, 'id_card' => 26600, 'id_version' => 1, 'id_langue' => 4, 'id_etat' => 6, 'prix_achat' => null, 'date_achat' => null, 'note' => null],
         ]])),
+        'www.pokecardex.com/api/collection/series' => Http::response(jobEncrypted(['blocs' => [
+            ['series' => [['id_serie' => '251', 'nom_us' => 'Delta Reign', 'nom_court' => 'DLR', 'id_cardmarket' => '6704']]],
+        ]])),
         'www.pokecardex.com/api/collection/*' => Http::response(null, 204),
         'www.pokecardex.com/' => Http::response('<meta name="csrf-token" content="t">'),
         'api.cardtrader.com/api/v2/orders*' => Http::response([]),
@@ -143,6 +146,44 @@ it('stops before writing when a side lost too many copies', function () {
     expect(PokecardexSyncRun::latest('id')->first()->outcome)->toBe('blocked')
         ->and(cardtraderWrites())->toBeEmpty();
 });
+
+it('refreshes the series list once a day even right after an import of a few series', function () {
+    fakeBothSites(3, 3);
+
+    SyncPokecardex::dispatchSync($this->user);
+    SyncPokecardex::dispatchSync($this->user);
+
+    expect(PokecardexSeries::find(251)?->code)->toBe('DLR');
+    expect(Http::recorded(fn (Request $request) => str_ends_with($request->url(), '/api/collection/series')))->toHaveCount(1);
+});
+
+it('closes the open run when the job dies outside handle', function () {
+    $run = PokecardexSyncRun::create(['user_id' => $this->user->id, 'started_at' => now()->subMinutes(30)]);
+
+    (new SyncPokecardex($this->user))->failed(new RuntimeException('has timed out'));
+
+    expect($run->refresh()->outcome)->toBe('failed')
+        ->and($run->message)->toContain('has timed out')
+        ->and($run->finished_at)->not->toBeNull();
+});
+
+it('raises a low memory limit for the run and never lowers a higher one', function (string $before, string $after) {
+    $original = ini_get('memory_limit');
+    ini_set('memory_limit', $before);
+    fakeBothSites();
+
+    try {
+        SyncPokecardex::dispatchSync($this->user);
+
+        expect(ini_get('memory_limit'))->toBe($after);
+    } finally {
+        ini_set('memory_limit', $original);
+    }
+})->with([
+    'default image limit' => ['128M', '512M'],
+    'higher limit' => ['1G', '1G'],
+    'no limit' => ['-1', '-1'],
+]);
 
 it('fails without Pokecardex credentials', function () {
     $this->user->pokecardexAccount->delete();

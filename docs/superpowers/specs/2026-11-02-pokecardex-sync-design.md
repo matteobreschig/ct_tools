@@ -589,6 +589,13 @@ Pokecardex nel profilo, import, "Sincronizza ora" (si ferma all'anteprima), cont
 anteprima". La coda deve restituire i job dopo più del timeout del giro: `REDIS_QUEUE_RETRY_AFTER`
 è 2400 contro i 1800 secondi di `SyncPokecardex`.
 
+Primo giro in produzione (2026-11-19): è morto dopo due minuti per memoria esaurita nel
+piano (128 MB, il predefinito dell'immagine PHP), e il job è rimasto "in corso" finché la coda
+non l'ha dato per perso dopo 2400 secondi. Correzioni: il giro alza il proprio limite a 512 MB
+(senza mai abbassarlo), chiude come "non riuscito" il giro rimasto aperto quando il job muore
+(`failed()`), e aggiorna l'elenco serie una volta al giorno con un segno in cache invece che
+dalle date delle righe, che lo script SQL aveva appena scritto.
+
 ## 11. Rischi
 
 - API interna di Pokecardex: percorsi, cifratura e chiave possono cambiare. I freni del § 7
