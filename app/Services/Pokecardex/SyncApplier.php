@@ -27,6 +27,12 @@ final class SyncApplier
 
     public function apply(User $user, SyncPlan $plan): ApplyResult
     {
+        // Un primo giro riscrive la base da zero: quella lasciata da un
+        // tentativo interrotto descrive uno stato che il piano non usa più.
+        if ($plan->firstRun) {
+            PokecardexSyncState::query()->where('user_id', $user->id)->delete();
+        }
+
         foreach ($plan->agreed as $state) {
             $this->saveBase($user, $state->key, $state->pokecardex);
         }

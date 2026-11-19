@@ -8,6 +8,7 @@ use App\Models\Expansion;
 use App\Models\PokecardexAccount;
 use App\Models\PokecardexCard;
 use App\Models\PokecardexSeries;
+use App\Models\PokecardexSyncRun;
 use App\Models\PokecardexSyncState;
 use App\Models\Product;
 use App\Models\User;
@@ -83,6 +84,11 @@ function froslassListing(int $quantity, array $attributes = []): Product
 
 function froslassBase(int $quantity, bool $reverse = false, string $language = 'it'): void
 {
+    // Una base vale solo dopo un giro applicato: senza, il giro resta il primo.
+    PokecardexSyncRun::query()->firstOrCreate(
+        ['user_id' => test()->user->id, 'outcome' => 'applied'],
+        ['started_at' => now()->subDay(), 'finished_at' => now()->subDay()],
+    );
     PokecardexSyncState::create([
         'user_id' => test()->user->id, 'blueprint_id' => FROSLASS_BLUEPRINT, 'condition' => 'nm',
         'language' => $language, 'reverse' => $reverse, 'first_edition' => false, 'quantity' => $quantity,
@@ -325,6 +331,19 @@ function froslassChanges(SyncPlan $plan): array
         ->values()
         ->all();
 }
+
+it('keeps the first run rules after a first apply stopped halfway', function () {
+    froslassListing(1, ['condition' => 'sp']);
+    PokecardexSyncState::create([
+        'user_id' => $this->user->id, 'blueprint_id' => FROSLASS_BLUEPRINT, 'condition' => 'nm',
+        'language' => 'it', 'reverse' => false, 'first_edition' => false, 'quantity' => 1,
+    ]);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 1, 6, 1]]));
+
+    expect($plan->firstRun)->toBeTrue()
+        ->and(froslassChanges($plan))->toBe(['to_pokecardex:nm:1>0', 'to_pokecardex:sp:0>1']);
+});
 
 it('keeps the CardTrader condition when only the condition differs on the first run', function () {
     froslassListing(1, ['condition' => 'sp']);

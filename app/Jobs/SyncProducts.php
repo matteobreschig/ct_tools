@@ -28,8 +28,10 @@ class SyncProducts implements ShouldQueue
      *
      * @param  bool  $applyDynamicSale  false quando la sincronizzazione Pokecardex rilegge le
      *                                  inserzioni: la vendita dinamica parte solo dopo le sue scritture
+     * @param  int  $rateLimitWaitSeconds  attesa massima di ogni chiamata CardTrader quando il limite
+     *                                     è pieno (vedi CTApiClient); 0 lancia subito
      */
-    public function __construct($user, public bool $applyDynamicSale = true)
+    public function __construct($user, public bool $applyDynamicSale = true, public int $rateLimitWaitSeconds = 0)
     {
         $this->user = $user;
     }
@@ -63,7 +65,7 @@ class SyncProducts implements ShouldQueue
     {
         $tcgdexEn = new TCGdex('en');
         $tcgdexIt = new TCGdex('it');
-        $client = new CTApiClient($this->user);
+        $client = new CTApiClient($this->user, $this->rateLimitWaitSeconds);
 
         $categoriesData = $client->get('/categories')->json();
         foreach ($categoriesData as $categoryData) {
