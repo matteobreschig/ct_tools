@@ -565,13 +565,38 @@ del § 4.2 sia per utente e per chiave carta.
 5. Confronto a tre e freni (§ 4, § 7), con test (fatto il 2026-11-12, § 4.2.1).
 6. Scritture su CardTrader e Pokecardex (fatto il 2026-11-12, § 4.5).
 7. Interfaccia (§ 8) con il bottone "Sincronizza ora" (fatta in parte il 2026-11-12, § 8.1).
-8. Primo allineamento reale con anteprima.
+8. Primo allineamento reale con anteprima: da fare in produzione (§ 10.1).
+
+### 10.1 Portare la configurazione in produzione (2026-11-19)
+
+Il database di sviluppo non si copia. Il catalogo, i blueprint e gli abbinamenti automatici
+il primo giro li ricostruisce da solo; vanno portate solo le scelte fatte a mano: serie
+abbinate a mano o ignorate, regole di serie, abbinamenti manuali e decisioni dell'utente.
+
+- `php artisan pokecardex:export-config <email>` scrive un file JSON, che
+  `pokecardex:import-config <email> <file>` carica nell'altro database.
+- Con `--sql` (e `--target-email=` se l'utente di destinazione ha un'altra email) l'export
+  scrive uno script MySQL o MariaDB da incollare in un client SQL, per quando copiare un file
+  nel container è scomodo.
+
+Le espansioni viaggiano per `ct_id`, l'utente per email. Se ne manca uno non si scrive niente:
+l'import si ferma prima della transazione, lo script SQL fallisce su una tabella temporanea
+con colonne NOT NULL. Si può rilanciare: aggiorna le righe esistenti e cancella solo gli
+abbinamenti automatici delle versioni con una regola, che il giro ricalcola.
+
+Ordine in produzione: backup, deploy con migrazioni, worker della coda attivo, credenziali
+Pokecardex nel profilo, import, "Sincronizza ora" (si ferma all'anteprima), controllo, "Applica
+anteprima". La coda deve restituire i job dopo più del timeout del giro: `REDIS_QUEUE_RETRY_AFTER`
+è 2400 contro i 1800 secondi di `SyncPokecardex`.
 
 ## 11. Rischi
 
 - API interna di Pokecardex: percorsi, cifratura e chiave possono cambiare. I freni del § 7
   trasformano un cambiamento in un blocco con notifica, mai in scritture sbagliate.
-- Cloudflare può bloccare le richieste da server in qualunque momento.
+- Cloudflare può bloccare le richieste da server in qualunque momento. Il 2026-11-19 ha
+  cominciato a rispondere 403 "Attention Required" alle chiamate `/api/collection/*` dalla
+  macchina di sviluppo, mentre le pagine normali si aprivano: il giro si ferma con "Pagina di
+  login inattesa" senza scrivere niente.
 - Termini di servizio di Pokecardex non verificati per l'uso automatizzato.
 - Le versioni speciali chiedono manutenzione a ogni espansione con varianti nuove.
 - Ritardo: una carta venduta su CardTrader resta su Pokecardex finché l'utente non sincronizza.
@@ -588,9 +613,18 @@ Dell'utente:
 - NM da CardTrader verso Pokecardex: Excellent (6);
 - diminuzioni prima dalle inserzioni in vendita, poi da quelle ferme (§ 4.3);
 - `sale_locked` senza trattamento speciale (§ 4.3);
-- carte nuove sempre soggette alla vendita dinamica (§ 4.3).
+- carte nuove sempre soggette alla vendita dinamica (§ 4.3);
+- Chaos Rising: per le 30 carte con più copie su CardTrader vince **CardTrader** (decisioni
+  `side` del 2026-11-12);
+- serie ignorate: Topps e Jumbo (le Jumbo su CardTrader sono nella categoria Oversized, 78,
+  che né la sincronizzazione né l'import dei prodotti leggono).
 
 Mie, da controllare:
 - regole di serie per le versioni speciali, abbinamento finale per carta (§ 5.3);
 - abbinamento serie ↔ espansione per nome e codice, poi a mano (§ 5.4);
-- soglie dei freni: 90% delle copie, 20 copie rimosse per giro (§ 7).
+- soglie dei freni: 90% delle copie, 20 copie rimosse per giro (§ 7);
+- ID Cardmarket accettato se il numero coincide; se il numero Pokecardex ha solo cifre bastano
+  le cifre ("PAL 203", "104e", "106h"), con una lettera ("95a") serve il numero identico; un
+  blueprint senza numero usa quello scritto nella versione ("Holo | MEE 009");
+- lingue di una versione lette da `langues` come oggetti `{statut, id_langue}`, con statut
+  "confirmed" o "presumed".
