@@ -601,6 +601,12 @@ senza log. Non era memoria: l'autoscaling di Horizon, riducendo i worker, ferma 
 anche se lavorano e li uccide dopo il `timeout` del supervisore, che era 60 secondi. Ora è 1900:
 sopra i 1800 di `SyncPokecardex`, sotto i 2400 di `REDIS_QUEUE_RETRY_AFTER`.
 
+Terzo tentativo: "Global CardTrader API rate limit exceeded". `CTApiClient` limita le chiamate
+(8 al secondo per tutta l'app, 100 al minuto per utente) e oltre il limite lanciava subito
+un'eccezione; il giro ne fa centinaia di fila, e il controllo prezzi orario intasa il limite
+comune. Ora il client accetta un'attesa massima: il giro e la sua rilettura delle inserzioni
+aspettano fino a 120 secondi per chiamata, gli altri job restano come prima.
+
 ## 11. Rischi
 
 - API interna di Pokecardex: percorsi, cifratura e chiave possono cambiare. I freni del § 7

@@ -2,6 +2,7 @@
 
 namespace App\Services\Pokecardex;
 
+use App\Jobs\SyncPokecardex;
 use App\Jobs\SyncProducts;
 use App\Models\User;
 
@@ -13,6 +14,6 @@ class CardTraderInventory
 {
     public function refresh(User $user): void
     {
-        (new SyncProducts($user, applyDynamicSale: false))->sync();
+        (new SyncProducts($user, applyDynamicSale: false, rateLimitWaitSeconds: SyncPokecardex::CARDTRADER_RATE_LIMIT_WAIT_SECONDS))->sync();
     }
 }
