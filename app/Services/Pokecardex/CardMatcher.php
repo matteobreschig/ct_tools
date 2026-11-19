@@ -129,11 +129,9 @@ final class CardMatcher
         }
 
         $blueprint = $candidates->first();
-        $blueprintNumber = PokecardexCard::normalizeCollectorNumber($blueprint->collector_number);
-        $blueprintDigits = PokecardexCard::collectorDigits($blueprint->collector_number);
+        $blueprintNumber = PokecardexCard::normalizeCollectorNumber($blueprint->displayedNumber());
 
-        // Contano le sole cifre: CardTrader scrive "PAL 203" o "104e" dove Pokecardex ha "203/193" o "104/109".
-        if ($blueprintDigits === null || $blueprintDigits !== PokecardexCard::collectorDigits($card->num_card)) {
+        if (! $this->sameCollectorNumber($card, $blueprintNumber)) {
             return CardMatch::review("L'ID Cardmarket porta a un blueprint con numero diverso ({$blueprintNumber} invece di {$card->collectorNumber()}).");
         }
 
@@ -241,6 +239,28 @@ final class CardMatcher
     private function isCosmos(?string $label): bool
     {
         return $label !== null && str_contains($label, 'cosmos');
+    }
+
+    /**
+     * Stesso numero di collezione tra carta Pokecardex e blueprint trovato con
+     * l'ID Cardmarket. Se il numero Pokecardex è fatto di sole cifre bastano le
+     * cifre: CardTrader scrive "PAL 203" o "104e" dove Pokecardex ha "203/193"
+     * o "104/109". Con una lettera ("95a") serve il numero identico, perché
+     * "95b" è un'altra carta.
+     */
+    private function sameCollectorNumber(PokecardexCard $card, ?string $blueprintNumber): bool
+    {
+        $cardNumber = $card->collectorNumber();
+
+        if ($cardNumber === null || $blueprintNumber === null) {
+            return false;
+        }
+
+        if (! ctype_digit($cardNumber)) {
+            return $cardNumber === $blueprintNumber;
+        }
+
+        return PokecardexCard::collectorDigits($blueprintNumber) === $cardNumber;
     }
 
     /**

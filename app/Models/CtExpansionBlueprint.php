@@ -38,6 +38,25 @@ class CtExpansionBlueprint extends Model
     }
 
     /**
+     * Numero di collezione, o quello scritto nel campo `version` dopo la barra
+     * quando CardTrader lascia vuoto il numero: "Holo | MEE 009" → "MEE 009".
+     */
+    public function displayedNumber(): ?string
+    {
+        if (filled($this->collector_number)) {
+            return $this->collector_number;
+        }
+
+        if (! str_contains((string) $this->version, '|')) {
+            return null;
+        }
+
+        $number = trim(explode('|', $this->version, 2)[1]);
+
+        return $number === '' ? null : $number;
+    }
+
+    /**
      * Variante dichiarata da CardTrader nel campo `version`, prima della barra:
      * "Cosmos Holo | 150/159" → "cosmosholo". Null se il campo non ne indica una.
      */

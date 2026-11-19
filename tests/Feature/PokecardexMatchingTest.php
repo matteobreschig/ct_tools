@@ -93,18 +93,26 @@ it('sends to review a Cardmarket id that lands on a different collector number',
     expect(PokecardexCardMatch::count())->toBe(0);
 });
 
-it('trusts a Cardmarket id whose blueprint number has a prefix or suffix around the same digits', function (string $pokecardexNumber, string $cardtraderNumber) {
+it('trusts a Cardmarket id whose blueprint number has a prefix or suffix around the same digits', function (string $pokecardexNumber, string $cardtraderNumber, ?string $version) {
     $card = twmCard(['num_card' => $pokecardexNumber]);
-    $blueprint = twmBlueprint(['collector_number' => $cardtraderNumber]);
+    $blueprint = twmBlueprint(['collector_number' => $cardtraderNumber, 'version' => $version]);
 
     $match = $this->matcher->match($card, 1);
 
     expect($match->status)->toBe(PokecardexMatchStatus::Matched)
         ->and($match->blueprintId)->toBe($blueprint->blueprint_id);
 })->with([
-    'stamped reprint' => ['203/193', 'PAL 203'],
-    'energy' => ['104/109', '104e'],
+    'stamped reprint' => ['203/193', 'PAL 203', null],
+    'energy' => ['104/109', '104e', null],
+    'number only in the version' => ['009', '', 'Holo | MEE 009'],
 ]);
+
+it('sends to review a Cardmarket id that lands on another lettered variant of the number', function () {
+    $card = twmCard(['num_card' => '95a']);
+    twmBlueprint(['collector_number' => '95b']);
+
+    expect($this->matcher->match($card, 1)->status)->toBe(PokecardexMatchStatus::Review);
+});
 
 it('sends to review a Cardmarket id shared by more blueprints', function () {
     $card = twmCard();
