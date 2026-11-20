@@ -309,9 +309,8 @@ final class CardMatcher
             ->where('name', $blueprint->name)
             ->get()
             ->contains(fn (CtExpansionBlueprint $twin): bool => PokecardexCard::collectorDigits($twin->collector_number) === PokecardexCard::collectorDigits($blueprint->collector_number));
-        $variant = $hasTwins ? $blueprint->variantLabel() : null;
 
-        $candidates = $rules->flatMap(function (PokecardexSeriesRule $rule) use ($blueprint, $reverse, $firstEdition, $variant, $hasTwins): array {
+        $candidates = $rules->flatMap(function (PokecardexSeriesRule $rule) use ($blueprint, $reverse, $firstEdition, $hasTwins): array {
             $series = PokecardexSeries::find($rule->id_serie);
 
             if ($series === null) {
@@ -332,13 +331,12 @@ final class CardMatcher
                     ->filter(fn (PokecardexCard $card): bool => PokecardexCard::collectorDigits($card->num_card) === PokecardexCard::collectorDigits($blueprint->collector_number)
                         || PokecardexCard::normalizeName($card->name_en) === PokecardexCard::normalizeName($blueprint->name));
 
-            // Col numero, a parità di numero conta anche il nome: nelle
-            // espansioni miste lo stesso numero compare su carte diverse.
-            $sameNumber = $cards->filter(fn (PokecardexCard $card): bool => PokecardexCard::collectorDigits($card->num_card) === PokecardexCard::collectorDigits($blueprint->collector_number));
-
-            if ($sameNumber->count() > 1 || $variant !== null) {
-                $sameNumber = $sameNumber->filter(fn (PokecardexCard $card): bool => PokecardexCard::normalizeName($card->name_en) === PokecardexCard::normalizeName($blueprint->name));
-            }
+            // Col numero serve anche il nome, pure con un candidato solo: nelle
+            // espansioni miste lo stesso numero compare su carte diverse, e
+            // l'unica carta col numero giusto può essere un'altra (Dudunsparce
+            // 129 di CardTrader finita su Sparkling Crystal 129/131).
+            $sameNumber = $cards->filter(fn (PokecardexCard $card): bool => PokecardexCard::collectorDigits($card->num_card) === PokecardexCard::collectorDigits($blueprint->collector_number)
+                && PokecardexCard::normalizeName($card->name_en) === PokecardexCard::normalizeName($blueprint->name));
 
             return ($sameCardmarket->count() === 1 ? $sameCardmarket : $sameNumber)
                 ->map(fn (PokecardexCard $card): array => [$card->id_card, $rule->id_version])

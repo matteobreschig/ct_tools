@@ -47,6 +47,7 @@ function twmCard(array $attributes = []): PokecardexCard
         'id_serie' => test()->series->id_serie,
         'num_card' => '053/167',
         'id_cardmarket' => 769227,
+        'name_en' => 'Froslass',
     ], $attributes));
 }
 
@@ -198,7 +199,7 @@ it('finds the Pokecardex special version of a blueprint in a rule expansion', fu
         ['id_version' => 1, 'nom_version_us' => 'Standard', 'langues' => [2]],
         ['id_version' => 197, 'nom_version_us' => 'Reverse (Masterball)', 'langues' => [2]],
     ]]);
-    $special = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $masterBall->ct_id, 'collector_number' => '053', 'cardmarket_product_id' => 888888]);
+    $special = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $masterBall->ct_id, 'name' => 'Froslass', 'collector_number' => '053', 'cardmarket_product_id' => 888888]);
 
     $target = $this->matcher->matchBlueprint($special->blueprint_id, $masterBall, reverse: true, firstEdition: false);
 
@@ -312,7 +313,7 @@ it('keeps a single blueprint even if its variant label differs from the Pokecard
     $pokeBall = Expansion::factory()->create(['code' => 'p-twm', 'blueprints_loaded_at' => now()]);
     PokecardexSeriesRule::create(['id_serie' => $this->series->id_serie, 'id_version' => 94, 'expansion_id' => $pokeBall->id]);
     $card = twmCard(['versions' => [['id_version' => 94, 'nom_version_us' => 'Reverse (Pokeball)', 'langues' => [2]]]]);
-    $special = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $pokeBall->ct_id, 'collector_number' => '053', 'version' => 'Poké Ball Reverse Holo | 053/167', 'cardmarket_product_id' => 770001]);
+    $special = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $pokeBall->ct_id, 'name' => 'Froslass', 'collector_number' => '053', 'version' => 'Poké Ball Reverse Holo | 053/167', 'cardmarket_product_id' => 770001]);
 
     expect($this->matcher->match($card, 94)->blueprintId)->toBe($special->blueprint_id);
 
@@ -404,4 +405,21 @@ it('does not trust a Cardmarket id that points to another number and name in a r
     $right = CtExpansionBlueprint::factory()->create(['expansion_ct_id' => $prizePack->ct_id, 'name' => 'Lunatone', 'collector_number' => '074', 'cardmarket_product_id' => 811175]);
 
     expect($this->matcher->match($lunatone, 144)->blueprintId)->toBe($right->blueprint_id);
+});
+
+it('does not take the only card with the same number when the name is another', function () {
+    $prizePack = Expansion::factory()->create(['code' => 'playprizep', 'blueprints_loaded_at' => now()]);
+    $series = PokecardexSeries::factory()->create(['code' => 'PRZP', 'cards_loaded_at' => now()]);
+    PokecardexSeriesRule::create(['id_serie' => $series->id_serie, 'id_version' => 144, 'expansion_id' => $prizePack->id]);
+    PokecardexCard::factory()->create([
+        'id_serie' => $series->id_serie, 'num_card' => '129/131', 'name_en' => 'Sparkling Crystal', 'id_cardmarket' => 864438,
+        'versions' => [['id_version' => 144, 'nom_version_us' => 'Non Holo (PPS)', 'langues' => [2]]],
+    ]);
+    $dudunsparce = CtExpansionBlueprint::factory()->create([
+        'expansion_ct_id' => $prizePack->ct_id, 'name' => 'Dudunsparce', 'collector_number' => '129', 'cardmarket_product_id' => 842642,
+    ]);
+
+    $target = $this->matcher->matchBlueprint($dudunsparce->blueprint_id, $prizePack, reverse: false, firstEdition: false);
+
+    expect($target->status)->toBe(PokecardexMatchStatus::Review);
 });

@@ -32,6 +32,8 @@ return [
         // Freni della sincronizzazione (§ 7 del design).
         'min_copies_ratio' => (float) env('POKECARDEX_MIN_COPIES_RATIO', 0.9),
         'max_removed_copies' => (int) env('POKECARDEX_MAX_REMOVED_COPIES', 20),
+        // Ogni giro con scritture passa dall'anteprima, finché la sincronizzazione non è collaudata.
+        'always_preview' => (bool) env('POKECARDEX_ALWAYS_PREVIEW', true),
     ],
 
     'telegram-bot-api' => [

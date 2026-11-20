@@ -12,6 +12,8 @@ use App\Models\User;
  *   sessioni scadute o siti cambiati che rispondono con collezioni vuote.
  * - Primo giro, o più di 20 copie da togliere: niente scritture dirette, serve
  *   l'anteprima approvata dall'utente.
+ * - Con `always_preview` (attivo di serie) ogni giro con scritture passa
+ *   dall'anteprima.
  *
  * Le soglie stanno in `config/services.php` (`pokecardex`).
  */
@@ -46,6 +48,10 @@ final class SyncSafety
 
         if ($removed > $maxRemoved) {
             return new SafetyVerdict(previewReason: "Il giro toglierebbe {$removed} copie (soglia {$maxRemoved}): serve la tua approvazione.");
+        }
+
+        if ($plan->changes !== [] && config('services.pokecardex.always_preview', true)) {
+            return new SafetyVerdict(previewReason: 'Anteprima richiesta per ogni giro: controlla le scritture prima di applicarle.');
         }
 
         return new SafetyVerdict;
