@@ -52,7 +52,8 @@ beforeEach(function () {
     $this->safety = new SyncSafety;
 });
 
-it('lets a normal run write', function () {
+it('lets a normal run write when previews are not forced', function () {
+    config(['services.pokecardex.always_preview' => false]);
     previousRun($this->user, 100, 100);
 
     $verdict = $this->safety->check($this->user, safetyPlan(95, 98, removed: 5));
@@ -99,11 +100,18 @@ it('asks for a preview when a run removes too many copies', function () {
 });
 
 it('reads the thresholds from the configuration', function () {
-    config(['services.pokecardex.max_removed_copies' => 50, 'services.pokecardex.min_copies_ratio' => 0.5]);
+    config(['services.pokecardex.max_removed_copies' => 50, 'services.pokecardex.min_copies_ratio' => 0.5, 'services.pokecardex.always_preview' => false]);
     previousRun($this->user, 100, 100);
 
     $verdict = $this->safety->check($this->user, safetyPlan(60, 60, removed: 30));
 
     expect($verdict->isBlocked())->toBeFalse()
         ->and($verdict->needsPreview())->toBeFalse();
+});
+
+it('asks for a preview on every run with writes by default', function () {
+    previousRun($this->user, 100, 100);
+
+    expect($this->safety->check($this->user, safetyPlan(removed: 1))->needsPreview())->toBeTrue()
+        ->and($this->safety->check($this->user, safetyPlan())->needsPreview())->toBeFalse();
 });
