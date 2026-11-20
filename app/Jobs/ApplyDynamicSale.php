@@ -12,6 +12,8 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Http\Client\RequestException;
+use RuntimeException;
+use Throwable;
 
 /**
  * Vendita dinamica: per ogni gruppo di carte tiene ferme le copie minime
@@ -22,7 +24,13 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
-    public int $timeout = 300;
+    /**
+     * Attesa massima sul limite di chiamate CardTrader: dopo un giro Pokecardex
+     * le divisioni sono tante, e fermarsi lascerebbe inserzioni a metà.
+     */
+    public const RATE_LIMIT_WAIT_SECONDS = 120;
+
+    public int $timeout = 1800;
 
     /**
      * Una sola istanza per utente in coda o in esecuzione: il job è lanciato
@@ -30,7 +38,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
      * inserzioni su Cardtrader, quindi due copie concorrenti le duplicherebbero.
      * Finestra allineata al timeout, oltre il lock si libera comunque.
      */
-    public int $uniqueFor = 300;
+    public int $uniqueFor = 1800;
 
     public function uniqueId(): string
     {
@@ -61,7 +69,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
         }
 
         $ctData = ['products' => []];
-        $client = new CTApiClient($this->user);
+        $client = new CTApiClient($this->user, self::RATE_LIMIT_WAIT_SECONDS);
 
         CardGroup::where('user_id', $this->user->id)
             ->get()
@@ -213,33 +221,60 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
     }
 
     /**
+     * La nuova inserzione non è nata: le copie tolte tornano su quella ferma,
+     * altrimenti sparirebbero da CardTrader. Se nemmeno questo riesce il job
+     * fallisce in modo visibile, con l'inserzione da sistemare a mano.
+     */
+    protected function restoreListing(CTApiClient $client, Product $product, Throwable $cause): void
+    {
+        try {
+            $client->put('/products/'.$product->product_id, [
+                'quantity' => $product->quantity,
+                'price' => config('app.ct_disable_price'),
+                'tag' => config('app.ct_vacation_tag'),
+            ]);
+        } catch (Throwable $exception) {
+            throw new RuntimeException(
+                "Inserzione {$product->product_id} ridotta da {$product->quantity} copie e non ripristinata dopo la creazione fallita ({$cause->getMessage()}): {$exception->getMessage()}",
+                previous: $exception,
+            );
+        }
+    }
+
+    /**
      * Divide un'inserzione di confine: riduce quella esistente alle copie da
      * tenere (al prezzo di disattivazione, anche per evitare che Cardtrader
      * fonda le due inserzioni) e pubblica l'eccedenza come nuova inserzione.
      */
     protected function splitListing(CTApiClient $client, Product $product, int $excess, float $salePrice): void
     {
-        // Prima la riduzione: se la creazione poi fallisce restano copie non
-        // pubblicate, mai copie offerte due volte.
+        // Prima la riduzione, così nessuna copia è offerta due volte; se la
+        // creazione poi fallisce le copie tornano sull'inserzione ferma.
         $client->put('/products/'.$product->product_id, [
             'quantity' => $product->quantity - $excess,
             'price' => config('app.ct_disable_price'),
             'tag' => config('app.ct_vacation_tag'),
         ]);
 
-        $created = $client->post('/products', [
-            'blueprint_id' => $product->blueprint_id,
-            'price' => $salePrice,
-            'quantity' => $excess,
-            'properties' => [
-                'condition' => $product->condition->getApiLabel(),
-                'pokemon_language' => $product->language->value,
-                'pokemon_reverse' => $product->reverse,
-                'signed' => $product->signed,
-                'altered' => $product->altered,
-                'first_edition' => $product->first_edition,
-            ],
-        ])->json();
+        try {
+            $created = $client->post('/products', [
+                'blueprint_id' => $product->blueprint_id,
+                'price' => $salePrice,
+                'quantity' => $excess,
+                'properties' => [
+                    'condition' => $product->condition->getApiLabel(),
+                    'pokemon_language' => $product->language->value,
+                    'pokemon_reverse' => $product->reverse,
+                    'signed' => $product->signed,
+                    'altered' => $product->altered,
+                    'first_edition' => $product->first_edition,
+                ],
+            ])->json();
+        } catch (RequestException|ApiRateLimitException $exception) {
+            $this->restoreListing($client, $product, $exception);
+
+            throw $exception;
+        }
 
         $product->quantity -= $excess;
         $product->sale = false;

@@ -3,6 +3,7 @@
 use App\Enums\ConditionType;
 use App\Enums\Language;
 use App\Enums\PokecardexSyncDirection;
+use App\Models\CtExpansionBlueprint;
 use App\Models\PokecardexAccount;
 use App\Models\Product;
 use App\Models\User;
@@ -97,6 +98,21 @@ it('creates a frozen CardTrader listing when the key has none', function () {
         && str_ends_with(parse_url($request->url(), PHP_URL_PATH), '/products/7777')
         && $request['tag'] === config('app.ct_vacation_tag'));
 });
+
+it('lets CardTrader decide the reverse where the blueprint does not offer it', function (?bool $choosable, bool $sendsReverse) {
+    Http::fake(['api.cardtrader.com/*' => Http::response(['resource' => ['id' => 7777, 'quantity' => 1]])]);
+    CtExpansionBlueprint::factory()->create(['blueprint_id' => 287733, 'reverse_choosable' => $choosable]);
+    $state = new KeyState(writerKey(), pokecardex: 1, cardtrader: 0, base: 0);
+
+    $this->cardtrader->write(new KeyChange($state, PokecardexSyncDirection::ToCardTrader));
+
+    Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+        && array_key_exists('pokemon_reverse', $request['properties']) === $sendsReverse);
+})->with([
+    'reverse a scelta' => [true, true],
+    'reverse deciso da CardTrader' => [false, false],
+    'catalogo senza informazione' => [null, true],
+]);
 
 it('removes CardTrader copies from listings on sale first, deleting empty ones', function () {
     Http::fake(['api.cardtrader.com/*' => Http::response([])]);

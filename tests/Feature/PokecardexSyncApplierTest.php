@@ -3,6 +3,7 @@
 use App\Enums\ConditionType;
 use App\Enums\Language;
 use App\Enums\PokecardexSyncDirection;
+use App\Models\CtExpansionBlueprint;
 use App\Models\PokecardexSyncState;
 use App\Models\User;
 use App\Services\Pokecardex\CardKey;
@@ -77,6 +78,22 @@ it('rewrites the base from scratch on a first run', function () {
     $this->applier->apply($this->user, new SyncPlan(true, [], [$agreed], [], [], [], 2, 2));
 
     expect(PokecardexSyncState::query()->pluck('quantity', 'blueprint_id')->all())->toBe([287733 => 2]);
+});
+
+it('merges the reverse base into the standard one where CardTrader decides the reverse', function () {
+    CtExpansionBlueprint::factory()->create(['blueprint_id' => 999, 'reverse_choosable' => false]);
+    CtExpansionBlueprint::factory()->create(['blueprint_id' => 287733, 'reverse_choosable' => true]);
+    $reverse = fn (int $blueprintId): CardKey => new CardKey($blueprintId, ConditionType::NM, Language::IT, true, false);
+    PokecardexSyncState::create(['user_id' => $this->user->id, ...$reverse(999)->attributes(), 'quantity' => 2]);
+    PokecardexSyncState::create(['user_id' => $this->user->id, ...applierKey('nm', 999)->attributes(), 'quantity' => 1]);
+    PokecardexSyncState::create(['user_id' => $this->user->id, ...$reverse(287733)->attributes(), 'quantity' => 4]);
+
+    $this->applier->apply($this->user, applierPlan([]));
+
+    expect(PokecardexSyncState::query()->orderBy('blueprint_id')->get(['blueprint_id', 'reverse', 'quantity'])->toArray())->toBe([
+        ['blueprint_id' => 999, 'reverse' => false, 'quantity' => 3],
+        ['blueprint_id' => 287733, 'reverse' => true, 'quantity' => 4],
+    ]);
 });
 
 it('stops at the first failed write and leaves that card base untouched', function () {

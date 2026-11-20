@@ -132,9 +132,9 @@ it('loads the single-card blueprints of an expansion once a day', function () {
 
     Http::fake([
         'api.cardtrader.com/api/v2/blueprints/export*' => Http::response([
-            ['id' => 287733, 'name' => 'Froslass', 'category_id' => 73, 'expansion_id' => 3674, 'fixed_properties' => ['collector_number' => '053'], 'card_market_ids' => [769227]],
+            ['id' => 287733, 'name' => 'Froslass', 'category_id' => 73, 'expansion_id' => 3674, 'fixed_properties' => ['collector_number' => '053'], 'card_market_ids' => [769227], 'editable_properties' => [['name' => 'pokemon_language'], ['name' => 'pokemon_reverse']]],
             ['id' => 287999, 'name' => 'Booster', 'category_id' => 74, 'expansion_id' => 3674, 'fixed_properties' => [], 'card_market_ids' => [111]],
-            ['id' => 288000, 'name' => 'Promo', 'category_id' => 73, 'expansion_id' => 3674, 'fixed_properties' => ['collector_number' => '200'], 'card_market_ids' => []],
+            ['id' => 288000, 'name' => 'Promo', 'category_id' => 73, 'expansion_id' => 3674, 'fixed_properties' => ['collector_number' => '200'], 'card_market_ids' => [], 'editable_properties' => [['name' => 'pokemon_language']]],
         ]),
     ]);
 
@@ -145,6 +145,8 @@ it('loads the single-card blueprints of an expansion once a day', function () {
     expect(CtExpansionBlueprint::count())->toBe(2)
         ->and(CtExpansionBlueprint::find(287733)->cardmarket_product_id)->toBe(769227)
         ->and(CtExpansionBlueprint::find(288000)->cardmarket_product_id)->toBeNull()
+        ->and(CtExpansionBlueprint::find(287733)->reverse_choosable)->toBeTrue()
+        ->and(CtExpansionBlueprint::find(288000)->reverse_choosable)->toBeFalse()
         ->and($expansion->refresh()->blueprints_loaded_at)->not->toBeNull();
     Http::assertSentCount(1);
     Http::assertSent(fn (Request $request) => str_contains($request->url(), 'expansion_id=3674'));

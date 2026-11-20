@@ -26,6 +26,7 @@ class CtExpansionBlueprint extends Model
         'name',
         'collector_number',
         'version',
+        'reverse_choosable',
         'cardmarket_product_id',
         'cardmarket_product_ids',
     ];
@@ -33,8 +34,26 @@ class CtExpansionBlueprint extends Model
     protected function casts(): array
     {
         return [
+            'reverse_choosable' => 'boolean',
             'cardmarket_product_ids' => 'array',
         ];
+    }
+
+    /**
+     * Blueprint su cui CardTrader decide da solo il reverse: `pokemon_reverse`
+     * non è tra le proprietà modificabili e il valore inviato viene ignorato
+     * (le "Cosmos Holo" diventano reverse, le altre normali). Lì reverse e
+     * normale sono la stessa inserzione.
+     *
+     * @return array<int, true>
+     */
+    public static function fixedReverseIds(): array
+    {
+        return self::query()
+            ->where('reverse_choosable', false)
+            ->pluck('blueprint_id')
+            ->mapWithKeys(fn (int $id): array => [$id => true])
+            ->all();
     }
 
     /**

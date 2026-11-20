@@ -3,8 +3,10 @@
 namespace App\Services\Pokecardex;
 
 use App\Enums\PokecardexSyncDirection;
+use App\Models\CtExpansionBlueprint;
 use App\Models\PokecardexSyncState;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
@@ -32,6 +34,8 @@ final class SyncApplier
         if ($plan->firstRun) {
             PokecardexSyncState::query()->where('user_id', $user->id)->delete();
         }
+
+        $this->mergeFixedReverseBases($user);
 
         foreach ($plan->agreed as $state) {
             $this->saveBase($user, $state->key, $state->pokecardex);
@@ -71,6 +75,31 @@ final class SyncApplier
             $writes[PokecardexSyncDirection::ToCardTrader->value],
             $writes[PokecardexSyncDirection::ToPokecardex->value],
         );
+    }
+
+    /**
+     * Dove CardTrader decide da solo il reverse, la base reverse si somma a
+     * quella normale e sparisce: è la stessa chiave per il piano
+     * (`CardKey::canonical()`), che ha già sommato le due quantità.
+     */
+    private function mergeFixedReverseBases(User $user): void
+    {
+        $fixedReverse = CtExpansionBlueprint::fixedReverseIds();
+
+        $stale = PokecardexSyncState::query()
+            ->where('user_id', $user->id)
+            ->where('reverse', true)
+            ->get()
+            ->filter(fn (PokecardexSyncState $state): bool => isset($fixedReverse[$state->blueprint_id]));
+
+        foreach ($stale as $state) {
+            DB::transaction(function () use ($user, $state, $fixedReverse): void {
+                $canonical = PokecardexSyncState::firstOrNew(['user_id' => $user->id, ...$state->key()->canonical($fixedReverse)->attributes()]);
+                $canonical->quantity = (int) $canonical->quantity + $state->quantity;
+                $canonical->save();
+                $state->delete();
+            });
+        }
     }
 
     /**
