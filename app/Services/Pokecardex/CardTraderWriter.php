@@ -2,6 +2,7 @@
 
 namespace App\Services\Pokecardex;
 
+use App\Models\CtExpansionBlueprint;
 use App\Models\Product;
 use App\Services\CTApiClient;
 use RuntimeException;
@@ -47,18 +48,26 @@ class CardTraderWriter
             return;
         }
 
+        $properties = [
+            'condition' => $state->key->condition->getApiLabel(),
+            'pokemon_language' => $state->key->language->value,
+            'pokemon_reverse' => $state->key->reverse,
+            'first_edition' => $state->key->firstEdition,
+            'signed' => false,
+            'altered' => false,
+        ];
+
+        // Dove il reverse non si può scegliere lo decide CardTrader: la chiave
+        // vale per tutte e due le versioni.
+        if (CtExpansionBlueprint::query()->whereKey($state->key->blueprintId)->value('reverse_choosable') === false) {
+            unset($properties['pokemon_reverse']);
+        }
+
         $created = $this->client->post('/products', [
             'blueprint_id' => $state->key->blueprintId,
             'price' => config('app.ct_disable_price'),
             'quantity' => $copies,
-            'properties' => [
-                'condition' => $state->key->condition->getApiLabel(),
-                'pokemon_language' => $state->key->language->value,
-                'pokemon_reverse' => $state->key->reverse,
-                'first_edition' => $state->key->firstEdition,
-                'signed' => false,
-                'altered' => false,
-            ],
+            'properties' => $properties,
         ])->json();
 
         $productId = $created['resource']['id'] ?? null;

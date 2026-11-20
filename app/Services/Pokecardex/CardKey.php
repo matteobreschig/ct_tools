@@ -59,4 +59,39 @@ final readonly class CardKey
             'first_edition' => $this->firstEdition,
         ];
     }
+
+    /**
+     * La chiave con il reverse tolto se CardTrader lo decide da solo per
+     * questo blueprint (`CtExpansionBlueprint::fixedReverseIds()`): reverse e
+     * normale finiscono sulla stessa inserzione, quindi sono la stessa chiave.
+     *
+     * @param  array<int, true>  $fixedReverse
+     */
+    public function canonical(array $fixedReverse): self
+    {
+        if (! $this->reverse || ! isset($fixedReverse[$this->blueprintId])) {
+            return $this;
+        }
+
+        return new self($this->blueprintId, $this->condition, $this->language, false, $this->firstEdition);
+    }
+
+    /**
+     * Come `canonical()`, su un identificativo di chiave o di carta già
+     * composto: il reverse è il penultimo pezzo.
+     *
+     * @param  array<int, true>  $fixedReverse
+     */
+    public static function canonicalId(string $id, array $fixedReverse): string
+    {
+        $parts = explode('|', $id);
+
+        if (count($parts) < 4 || ! isset($fixedReverse[(int) $parts[0]])) {
+            return $id;
+        }
+
+        $parts[count($parts) - 2] = '0';
+
+        return implode('|', $parts);
+    }
 }

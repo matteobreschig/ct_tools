@@ -5,6 +5,7 @@ namespace App\Services\Pokecardex;
 use App\Enums\ConditionType;
 use App\Enums\PokecardexMatchStatus;
 use App\Enums\PokecardexSyncDirection;
+use App\Models\CtExpansionBlueprint;
 use App\Models\Expansion;
 use App\Models\PokecardexCard;
 use App\Models\PokecardexSeries;
@@ -58,6 +59,14 @@ final class SyncPlanner
      */
     private array $ownedLanguages = [];
 
+    /**
+     * Blueprint su cui CardTrader decide da solo il reverse: lì reverse e
+     * normale sono la stessa chiave (`CardKey::canonical()`).
+     *
+     * @var array<int, true>
+     */
+    private array $fixedReverse = [];
+
     public function __construct(private CardMatcher $matcher) {}
 
     /**
@@ -75,17 +84,34 @@ final class SyncPlanner
         $this->ownedLanguages = $rows->mapWithKeys(fn (PokecardexRow $row): array => ["{$row->idCard}|{$row->idVersion}|{$row->idLangue}" => true])->all();
         $pokecardexKeys = $this->pokecardexKeys($rows);
 
+        // Dopo gli abbinamenti: caricano i cataloghi delle espansioni, che
+        // dicono dove il reverse non si può scegliere.
+        $this->fixedReverse = CtExpansionBlueprint::fixedReverseIds();
+        $pokecardexKeys = $this->canonicalPokecardexKeys($pokecardexKeys);
+        $sales = collect($sales)
+            ->groupBy(fn (array $keySales, string $keyId): string => CardKey::canonicalId($keyId, $this->fixedReverse), preserveKeys: true)
+            ->map(fn (Collection $group): array => $group->flatten(1)->all())
+            ->all();
+        $sides = collect($sides)
+            ->mapWithKeys(fn (string $side, string $variantId): array => [CardKey::canonicalId($variantId, $this->fixedReverse) => $side])
+            ->all();
+
         $products = Product::query()->where('user_id', $user->id)->whereNotNull('blueprint_id')->get();
         $cardtraderKeys = $this->cardtraderKeys($products);
 
         $firstRun = PokecardexSyncRun::isFirstRunFor($user);
 
         // Al primo giro una base rimasta da un tentativo interrotto non conta:
-        // il piano riparte dai due siti com'erano adesso.
+        // il piano riparte dai due siti com'erano adesso. Le basi di reverse
+        // e normale di una stessa chiave si sommano.
         $bases = $firstRun ? collect() : PokecardexSyncState::query()
             ->where('user_id', $user->id)
             ->get()
-            ->keyBy(fn (PokecardexSyncState $state): string => $state->key()->id());
+            ->groupBy(fn (PokecardexSyncState $state): string => $state->key()->canonical($this->fixedReverse)->id())
+            ->map(fn (Collection $states): array => [
+                'key' => $states->first()->key()->canonical($this->fixedReverse),
+                'quantity' => (int) $states->sum('quantity'),
+            ]);
         $changes = [];
         $agreed = [];
         $conflicts = [];
@@ -98,10 +124,10 @@ final class SyncPlanner
             ->values();
 
         $states = $keyIds->map(fn (string $keyId): KeyState => new KeyState(
-            $pokecardexKeys[$keyId]['key'] ?? $cardtraderKeys[$keyId]['key'] ?? $bases->get($keyId)->key(),
+            $pokecardexKeys[$keyId]['key'] ?? $cardtraderKeys[$keyId]['key'] ?? $bases->get($keyId)['key'],
             pokecardex: array_sum(array_map(fn (PokecardexRow $row): int => $row->quantity, $pokecardexKeys[$keyId]['rows'] ?? [])),
             cardtrader: (int) collect($cardtraderKeys[$keyId]['products'] ?? [])->sum('quantity'),
-            base: $bases->get($keyId)?->quantity,
+            base: $bases->get($keyId)['quantity'] ?? null,
             rows: $pokecardexKeys[$keyId]['rows'] ?? [],
             products: $cardtraderKeys[$keyId]['products'] ?? [],
         ));
@@ -384,7 +410,17 @@ final class SyncPlanner
             return null;
         }
 
-        $match = $this->matcher->matchBlueprint($state->key->blueprintId, $expansion, $state->key->reverse, $state->key->firstEdition);
+        // Dove CardTrader decide da solo il reverse, la carta Pokecardex può
+        // essere segnata in tutte e due le versioni: prima la normale.
+        $reverseOptions = isset($this->fixedReverse[$state->key->blueprintId]) ? [false, true] : [$state->key->reverse];
+
+        foreach ($reverseOptions as $reverse) {
+            $match = $this->matcher->matchBlueprint($state->key->blueprintId, $expansion, $reverse, $state->key->firstEdition);
+
+            if ($match->status === PokecardexMatchStatus::Matched) {
+                break;
+            }
+        }
 
         if ($match->status !== PokecardexMatchStatus::Matched) {
             $item = new ReviewItem($match->status === PokecardexMatchStatus::Pending ? 'pending' : 'no_target', "{$match->reason} Quindi {$consequence}.", $payload);
@@ -476,11 +512,32 @@ final class SyncPlanner
                 continue;
             }
 
-            $key = new CardKey($product->blueprint_id, $product->condition, $product->language, (bool) $product->reverse, (bool) $product->first_edition);
+            $key = (new CardKey($product->blueprint_id, $product->condition, $product->language, (bool) $product->reverse, (bool) $product->first_edition))
+                ->canonical($this->fixedReverse);
             $keys[$key->id()]['key'] = $key;
             $keys[$key->id()]['products'][] = $product;
         }
 
         return $keys;
+    }
+
+    /**
+     * Righe Pokecardex riunite sulle chiavi canoniche: dove CardTrader decide
+     * da solo il reverse, versione normale e reverse vanno sulla stessa chiave.
+     *
+     * @param  array<string, array{key: CardKey, rows: list<PokecardexRow>}>  $keys
+     * @return array<string, array{key: CardKey, rows: list<PokecardexRow>}>
+     */
+    private function canonicalPokecardexKeys(array $keys): array
+    {
+        $canonical = [];
+
+        foreach ($keys as $entry) {
+            $key = $entry['key']->canonical($this->fixedReverse);
+            $canonical[$key->id()]['key'] = $key;
+            $canonical[$key->id()]['rows'] = [...$canonical[$key->id()]['rows'] ?? [], ...$entry['rows']];
+        }
+
+        return $canonical;
     }
 }

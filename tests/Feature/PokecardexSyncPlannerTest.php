@@ -192,6 +192,33 @@ it('keeps reverse and standard copies on different keys', function () {
         ->toBe(collect([froslassKey(), froslassKey(true)])->sort()->values()->all());
 });
 
+it('joins reverse and standard copies where CardTrader decides the reverse', function () {
+    CtExpansionBlueprint::query()->whereKey(FROSLASS_BLUEPRINT)->update(['reverse_choosable' => false]);
+    // Pokecardex la segna reverse, CardTrader l'ha salvata normale; la base
+    // reverse viene da un giro fatto prima della correzione.
+    froslassBase(1, reverse: true);
+    froslassListing(1);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([[101, 2, 6, 1]]));
+
+    expect($plan->changes)->toBeEmpty()
+        ->and($plan->agreed)->toHaveCount(1)
+        ->and($plan->agreed[0]->key->id())->toBe(froslassKey());
+});
+
+it('adds on Pokecardex in an existing version where CardTrader decides the reverse', function () {
+    CtExpansionBlueprint::query()->whereKey(FROSLASS_BLUEPRINT)->update(['reverse_choosable' => false]);
+    froslassBase(0);
+    froslassListing(2, ['reverse' => true]);
+
+    $plan = $this->planner->plan($this->user, froslassCollection([]));
+
+    $change = onlyChange($plan);
+    expect($change->direction)->toBe(PokecardexSyncDirection::ToPokecardex)
+        ->and($change->state->key->id())->toBe(froslassKey())
+        ->and($change->target)->toBe(['id_card' => 26600, 'id_version' => 1]);
+});
+
 it('finds where to add on Pokecardex', function () {
     froslassBase(0, reverse: true);
     froslassListing(2, ['reverse' => true]);

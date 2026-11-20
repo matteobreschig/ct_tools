@@ -612,6 +612,22 @@ quindi il giro dopo avrebbe perso le regole del primo e trattato ogni differenza
 novità. Ora è primo giro finché nessun giro è `applied`; al primo giro la base esistente non
 conta e l'applicazione la riscrive da zero.
 
+Secondo giro (2026-11-20): 8 scritture su Pokecardex senza nessuna vendita. Due cause.
+
+- **Reverse deciso da CardTrader.** Su molti blueprint (metà dei Prize Pack) `pokemon_reverse`
+  non è tra le `editable_properties`: CardTrader ignora il valore inviato e sceglie da solo
+  (le "Cosmos Holo" diventano reverse, le altre normali). Il primo giro creava l'inserzione
+  con il segno di Pokecardex, CardTrader la salvava con l'altro; il giro dopo la chiave di
+  Pokecardex risultava vuota su CardTrader e la copia veniva tolta da Pokecardex. Ora il
+  catalogo salva `reverse_choosable` per blueprint; dove è falso reverse e normale sono la
+  stessa chiave (`CardKey::canonical()`), le basi reverse si sommano a quelle normali, la
+  creazione non manda `pokemon_reverse` e l'aggiunta su Pokecardex usa la versione che la
+  carta ha (prima la normale).
+- **Vendita dinamica.** Dividendo un'inserzione riduceva quella ferma e poi creava quella in
+  vendita; se la creazione falliva (limite di chiamate subito dopo il giro) le copie tolte
+  sparivano da CardTrader. Ora tornano sull'inserzione ferma, e se nemmeno questo riesce il
+  job fallisce in modo visibile; il job aspetta il limite fino a 120 secondi per chiamata.
+
 ## 11. Rischi
 
 - API interna di Pokecardex: percorsi, cifratura e chiave possono cambiare. I freni del § 7
