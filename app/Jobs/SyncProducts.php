@@ -11,6 +11,7 @@ use App\Services\CTApiClient;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Str;
 use TCGdex\TCGdex;
 
 class SyncProducts implements ShouldQueue
@@ -58,19 +59,23 @@ class SyncProducts implements ShouldQueue
     }
 
     /**
-     * Confronta il totale del set scritto da CardTrader nel numero di
-     * collezione ("11/101") con quello ufficiale di TCGdex. Se uno dei due
-     * manca non c'è nulla da smentire e il match per numero resta valido.
+     * Confronta il nome inglese CardTrader con quello TCGdex ignorando
+     * maiuscole, accenti e punteggiatura; basta che uno contenga l'altro
+     * ("Basic Fire Energy" e "Fire Energy"). Senza il nome TCGdex non c'è
+     * nulla da smentire e il match per numero resta valido.
      */
-    public static function setTotalMatches(string $ctCollectorNumber, int $tcgdexOfficialTotal): bool
+    public static function namesMatch(string $ctName, ?string $tcgdexEnglishName): bool
     {
-        if (! str_contains($ctCollectorNumber, '/') || $tcgdexOfficialTotal <= 0) {
+        $normalize = fn (string $name): string => preg_replace('/[^a-z0-9]+/', '', mb_strtolower(Str::ascii($name)));
+
+        $ct = $normalize($ctName);
+        $tcgdex = $normalize((string) $tcgdexEnglishName);
+
+        if ($ct === '' || $tcgdex === '') {
             return true;
         }
 
-        $ctTotal = (int) trim(explode('/', $ctCollectorNumber, 2)[1]);
-
-        return $ctTotal <= 0 || $ctTotal === $tcgdexOfficialTotal;
+        return str_contains($ct, $tcgdex) || str_contains($tcgdex, $ct);
     }
 
     /**
@@ -145,6 +150,9 @@ class SyncProducts implements ShouldQueue
         $italianNamesByMeta = [];
         $pendingTranslation = [];
 
+        // Nomi inglesi TCGdex già letti in questo ciclo, per id carta.
+        $englishNames = [];
+
         foreach ($productsData as $productData) {
             $product = Product::firstOrNew([
                 'product_id' => $productData['id'],
@@ -198,15 +206,19 @@ class SyncProducts implements ShouldQueue
                     }
                 }
 
-                // Stesso numero ma totale del set diverso (es. le ristampe con
-                // timbro "11/101" dentro il set 30° Anniversario, che per TCGdex
-                // ha 128 carte): è un'altra carta, quindi niente dati TCGdex.
-                if ($tcgdexProduct && ! self::setTotalMatches(
-                    (string) ($productData['properties_hash']['collector_number'] ?? ''),
-                    (int) ($tcgdexProduct->set->cardCount->official ?? 0),
-                )) {
-                    $tcgdexProduct = null;
-                    $italianMatch = false;
+                // Stesso numero ma carta diversa: nello stesso set CardTrader
+                // convivono carte con lo stesso numero (es. la Moltres 011 e la
+                // Genesect EX 011 con timbro del 30° Anniversario). Il nome
+                // inglese di TCGdex deve corrispondere a quello CardTrader.
+                if ($tcgdexProduct) {
+                    $englishName = $italianMatch
+                        ? ($englishNames[$tcgdexProduct->id] ??= $tcgdexEn->card->get($tcgdexProduct->id)?->name)
+                        : $tcgdexProduct->name;
+
+                    if (! self::namesMatch((string) $productData['name_en'], $englishName)) {
+                        $tcgdexProduct = null;
+                        $italianMatch = false;
+                    }
                 }
             }
 
