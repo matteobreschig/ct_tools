@@ -7,11 +7,14 @@ use App\Models\CardGroup;
 use App\Models\CardGroupSetting;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\VersionKeepSetting;
 use App\Services\CTApiClient;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Collection as SupportCollection;
 use RuntimeException;
 use Throwable;
 
@@ -64,7 +67,11 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
         $overrides = CardGroupSetting::where('user_id', $this->user->id)
             ->pluck('keep_quantity', 'group_key');
 
-        if (! $hasMinimums && $overrides->isEmpty()) {
+        $versionKeeps = VersionKeepSetting::where('user_id', $this->user->id)
+            ->get()
+            ->mapWithKeys(fn (VersionKeepSetting $setting): array => [$setting->key() => $setting->keep_quantity]);
+
+        if (! $hasMinimums && $overrides->isEmpty() && $versionKeeps->isEmpty()) {
             return;
         }
 
@@ -73,7 +80,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
 
         CardGroup::where('user_id', $this->user->id)
             ->get()
-            ->each(function (CardGroup $group) use ($overrides, $client, &$ctData) {
+            ->each(function (CardGroup $group) use ($overrides, $versionKeeps, $client, &$ctData) {
                 // Tengo le copie più economiche e vendo prima quelle di maggior
                 // valore: prezzo Cardmarket, altrimenti quello dell'inserzione
                 // (MoneyCast salva i prezzi mancanti come 0, quindi lo zero va
@@ -90,71 +97,171 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
                 $keep = $overrides[$group->group_key]
                     ?? $this->user->keepQuantityForType($products->first()?->card_type);
 
-                if ($keep === null) {
-                    return;
-                }
-
-                $kept = 0;
-                foreach ($products as $product) {
-                    // Blocco manuale: lo stato di vendita resta quello impostato
-                    // a mano. Fuori dal conteggio del minimo: le copie automatiche
-                    // si gestiscono a parte, le bloccate sono "extra".
-                    if ($product->sale_locked) {
-                        continue;
-                    }
-
-                    $sell = $kept >= $keep;
-
-                    if (! $sell) {
-                        $kept += $product->quantity;
-
-                        // Riga di confine con copie in eccesso: divido
-                        // l'inserzione, l'eccedenza diventa una nuova inserzione
-                        // in vendita. Se la divisione non riesce la riga resta
-                        // tutta ferma (mai sotto il minimo) e riprovo al giro dopo.
-                        $excess = $kept - $keep;
-                        $salePrice = $this->resolveSalePrice($client, $product);
-
-                        if ($excess > 0 && $salePrice > 0) {
-                            try {
-                                $this->splitListing($client, $product, $excess, $salePrice);
-                                $kept = $keep;
-                            } catch (RequestException|ApiRateLimitException) {
-                                // Riga intera ferma, niente di pubblicato a metà.
-                            }
-                        }
-                    }
-
-                    // Senza un prezzo proprio pubblico al trend Cardmarket o,
-                    // in mancanza, al minimo del marketplace Cardtrader.
-                    // Senza nessuna fonte l'inserzione non è pubblicabile.
-                    if ($sell && $product->price <= 0) {
-                        $resolved = $this->resolveSalePrice($client, $product);
-
-                        if ($resolved === null) {
-                            continue;
-                        }
-
-                        $product->price = $resolved;
-                    }
-
-                    $product->sale = $sell;
-                    $product->save();
-
-                    // Oltre al prezzo di disattivazione, il tag vacanza: con la
-                    // modalità vacanza per tag attiva su Cardtrader le inserzioni
-                    // ferme spariscono dagli acquisti restando nel magazzino.
-                    $ctData['products'][] = [
-                        'id' => $product->product_id,
-                        'price' => $sell ? $product->price : config('app.ct_disable_price'),
-                        'tag' => $sell ? null : config('app.ct_vacation_tag'),
-                    ];
-                }
+                $this->applyToProducts($products, $keep, $versionKeeps, $client, $ctData);
             });
 
         if ($ctData['products'] !== []) {
             $client->post('/products/bulk_update', $ctData);
         }
+    }
+
+    /**
+     * Applica lo stato di vendita alle righe di un gruppo (già ordinate dalla
+     * più economica). Prima le deroghe di versione, che tengono ferme le loro
+     * copie in più rispetto al minimo del gruppo; poi la regola di gruppo sulle
+     * righe rimaste. Senza minimo di gruppo ($groupKeep null) le altre righe
+     * restano come sono.
+     *
+     * @param  Collection<int, Product>  $products
+     * @param  SupportCollection<string, int>  $versionKeeps  copie da tenere per chiave di versione
+     * @param  array{products: list<array<string, mixed>>}  $ctData
+     */
+    protected function applyToProducts(Collection $products, ?int $groupKeep, SupportCollection $versionKeeps, CTApiClient $client, array &$ctData): void
+    {
+        $products = $this->keepVersionCopies($products, $versionKeeps, $client, $ctData);
+
+        if ($groupKeep === null) {
+            return;
+        }
+
+        $keep = $groupKeep;
+
+        $kept = 0;
+        foreach ($products as $product) {
+            // Blocco manuale: lo stato di vendita resta quello impostato
+            // a mano. Fuori dal conteggio del minimo: le copie automatiche
+            // si gestiscono a parte, le bloccate sono "extra".
+            if ($product->sale_locked) {
+                continue;
+            }
+
+            $sell = $kept >= $keep;
+
+            if (! $sell) {
+                $kept += $product->quantity;
+
+                // Riga di confine con copie in eccesso: divido
+                // l'inserzione, l'eccedenza diventa una nuova inserzione
+                // in vendita. Se la divisione non riesce la riga resta
+                // tutta ferma (mai sotto il minimo) e riprovo al giro dopo.
+                $excess = $kept - $keep;
+                $salePrice = $this->resolveSalePrice($client, $product);
+
+                if ($excess > 0 && $salePrice > 0) {
+                    try {
+                        $this->splitListing($client, $product, $excess, $salePrice);
+                        $kept = $keep;
+                    } catch (RequestException|ApiRateLimitException) {
+                        // Riga intera ferma, niente di pubblicato a metà.
+                    }
+                }
+            }
+
+            // Senza un prezzo proprio pubblico al trend Cardmarket o,
+            // in mancanza, al minimo del marketplace Cardtrader.
+            // Senza nessuna fonte l'inserzione non è pubblicabile.
+            if ($sell && $product->price <= 0) {
+                $resolved = $this->resolveSalePrice($client, $product);
+
+                if ($resolved === null) {
+                    continue;
+                }
+
+                $product->price = $resolved;
+            }
+
+            $product->sale = $sell;
+            $product->save();
+
+            // Oltre al prezzo di disattivazione, il tag vacanza: con la
+            // modalità vacanza per tag attiva su Cardtrader le inserzioni
+            // ferme spariscono dagli acquisti restando nel magazzino.
+            $ctData['products'][] = [
+                'id' => $product->product_id,
+                'price' => $sell ? $product->price : config('app.ct_disable_price'),
+                'tag' => $sell ? null : config('app.ct_vacation_tag'),
+            ];
+        }
+    }
+
+    /**
+     * Tiene ferme le copie delle versioni con deroga e restituisce le righe
+     * rimaste alla regola di gruppo.
+     *
+     * @param  Collection<int, Product>  $products
+     * @param  SupportCollection<string, int>  $versionKeeps
+     * @param  array{products: list<array<string, mixed>>}  $ctData
+     * @return Collection<int, Product>
+     */
+    protected function keepVersionCopies(Collection $products, SupportCollection $versionKeeps, CTApiClient $client, array &$ctData): Collection
+    {
+        $keptByVersion = [];
+        $usedIds = [];
+        $spawned = [];
+
+        foreach ($products as $product) {
+            // Righe bloccate a mano: né conteggiate né toccate.
+            if ($product->sale_locked) {
+                continue;
+            }
+
+            $key = VersionKeepSetting::keyFor($product);
+            $keep = $versionKeeps[$key] ?? null;
+            $kept = $keptByVersion[$key] ?? 0;
+
+            if ($keep === null || $kept >= $keep) {
+                continue;
+            }
+
+            $kept += $product->quantity;
+
+            // Riga di confine con copie in eccesso: stessa divisione della
+            // regola di gruppo, se non riesce la riga resta tutta ferma.
+            $excess = $kept - $keep;
+            $salePrice = $this->resolveSalePrice($client, $product);
+
+            if ($excess > 0 && $salePrice > 0) {
+                try {
+                    $created = $this->splitListing($client, $product, $excess, $salePrice);
+                    $kept = $keep;
+
+                    if ($created !== null) {
+                        $spawned[] = $created;
+                    }
+                } catch (RequestException|ApiRateLimitException) {
+                    // Riga intera ferma, niente di pubblicato a metà.
+                }
+            }
+
+            $keptByVersion[$key] = $kept;
+            $usedIds[] = $product->id;
+
+            $product->sale = false;
+            $product->save();
+
+            $ctData['products'][] = [
+                'id' => $product->product_id,
+                'price' => config('app.ct_disable_price'),
+                'tag' => config('app.ct_vacation_tag'),
+            ];
+        }
+
+        $remaining = $products->reject(fn (Product $product): bool => in_array($product->id, $usedIds, true))->values();
+
+        // L'eccedenza delle divisioni passa alla regola di gruppo. Se Cardtrader
+        // l'ha fusa con una riga già nel gruppo, vale la riga aggiornata: quella
+        // in memoria ha la quantità vecchia e farebbe sparire le copie fuse.
+        foreach ($spawned as $created) {
+            $index = $remaining->search(fn (Product $product): bool => $product->id === $created->id);
+
+            if ($index === false) {
+                $remaining->push($created);
+            } else {
+                $remaining->put($index, $created);
+            }
+        }
+
+        return $remaining;
     }
 
     /**
@@ -245,8 +352,9 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
      * Divide un'inserzione di confine: riduce quella esistente alle copie da
      * tenere (al prezzo di disattivazione, anche per evitare che Cardtrader
      * fonda le due inserzioni) e pubblica l'eccedenza come nuova inserzione.
+     * Restituisce la riga dell'inserzione dell'eccedenza (nuova o fusa), se nota.
      */
-    protected function splitListing(CTApiClient $client, Product $product, int $excess, float $salePrice): void
+    protected function splitListing(CTApiClient $client, Product $product, int $excess, float $salePrice): ?Product
     {
         // Prima la riduzione, così nessuna copia è offerta due volte; se la
         // creazione poi fallisce le copie tornano sull'inserzione ferma.
@@ -284,7 +392,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
         // vendita: allineo la riga locale all'inserzione restituita, esistente o nuova.
         $resource = $created['resource'] ?? null;
         if ($resource) {
-            Product::updateOrCreate(
+            return Product::updateOrCreate(
                 [
                     'product_id' => $resource['id'],
                     'user_id' => $product->user_id,
@@ -304,5 +412,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
                 ]),
             );
         }
+
+        return null;
     }
 }
