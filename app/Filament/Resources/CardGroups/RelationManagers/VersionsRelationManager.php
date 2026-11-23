@@ -2,11 +2,16 @@
 
 namespace App\Filament\Resources\CardGroups\RelationManagers;
 
+use App\Models\Product;
+use App\Models\VersionKeepSetting;
 use App\Services\CTApiClient;
+use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\ToggleButtons;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
@@ -25,6 +30,17 @@ class VersionsRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
+        // Deroghe dell'utente, lette una sola volta per richiesta (evita un
+        // N+1 sulla colonna "Da tenere").
+        $keeps = null;
+        $keepFor = function (Product $record) use (&$keeps): ?int {
+            $keeps ??= VersionKeepSetting::where('user_id', $record->user_id)
+                ->get()
+                ->mapWithKeys(fn (VersionKeepSetting $setting): array => [$setting->key() => $setting->keep_quantity]);
+
+            return $keeps[VersionKeepSetting::keyFor($record)] ?? null;
+        };
+
         return $table
             ->columns([
                 ImageColumn::make('image_url')
@@ -83,6 +99,10 @@ class VersionsRelationManager extends RelationManager
                     ->label('Reverse')
                     ->boolean()
                     ->sortable(),
+                TextColumn::make('keep_quantity')
+                    ->label('Da tenere')
+                    ->state($keepFor)
+                    ->numeric(),
                 TextColumn::make('quantity')
                     ->label('Quantità')
                     ->numeric()
@@ -105,6 +125,41 @@ class VersionsRelationManager extends RelationManager
                     )
                     ->suffix(' €')
                     ->sortable(),
+            ])
+            ->recordActions([
+                Action::make('set_keep_quantity')
+                    ->label('Copie da tenere')
+                    ->icon(Heroicon::LockClosed)
+                    ->fillForm(fn (Product $record): array => ['keep_quantity' => $keepFor($record)])
+                    ->schema([
+                        TextInput::make('keep_quantity')
+                            ->label('Copie da tenere ferme per questa versione')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(0)
+                            ->helperText('Si sommano al minimo della carta. Lascia vuoto o 0 per toglierle.'),
+                    ])
+                    ->action(function (array $data, Product $record): void {
+                        $attributes = [
+                            'user_id' => $record->user_id,
+                            'blueprint_id' => $record->blueprint_id,
+                            'language' => $record->language->value,
+                            'condition' => $record->condition->value,
+                            'reverse' => $record->reverse,
+                        ];
+                        $quantity = (int) ($data['keep_quantity'] ?? 0);
+
+                        if ($quantity > 0) {
+                            VersionKeepSetting::updateOrCreate($attributes, ['keep_quantity' => $quantity]);
+                        } else {
+                            VersionKeepSetting::where($attributes)->delete();
+                        }
+
+                        Notification::make()
+                            ->title($quantity > 0 ? "Da tenere: {$quantity}" : 'Regola di versione tolta')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
