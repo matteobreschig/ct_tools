@@ -58,6 +58,22 @@ class SyncProducts implements ShouldQueue
     }
 
     /**
+     * Confronta il totale del set scritto da CardTrader nel numero di
+     * collezione ("11/101") con quello ufficiale di TCGdex. Se uno dei due
+     * manca non c'è nulla da smentire e il match per numero resta valido.
+     */
+    public static function setTotalMatches(string $ctCollectorNumber, int $tcgdexOfficialTotal): bool
+    {
+        if (! str_contains($ctCollectorNumber, '/') || $tcgdexOfficialTotal <= 0) {
+            return true;
+        }
+
+        $ctTotal = (int) trim(explode('/', $ctCollectorNumber, 2)[1]);
+
+        return $ctTotal <= 0 || $ctTotal === $tcgdexOfficialTotal;
+    }
+
+    /**
      * Rilegge le inserzioni Cardtrader dell'utente nella tabella `products`.
      * Lancia un'eccezione se qualcosa va storto.
      */
@@ -180,6 +196,17 @@ class SyncProducts implements ShouldQueue
                         $tcgdexProduct = null;
                         $italianMatch = false;
                     }
+                }
+
+                // Stesso numero ma totale del set diverso (es. le ristampe con
+                // timbro "11/101" dentro il set 30° Anniversario, che per TCGdex
+                // ha 128 carte): è un'altra carta, quindi niente dati TCGdex.
+                if ($tcgdexProduct && ! self::setTotalMatches(
+                    (string) ($productData['properties_hash']['collector_number'] ?? ''),
+                    (int) ($tcgdexProduct->set->cardCount->official ?? 0),
+                )) {
+                    $tcgdexProduct = null;
+                    $italianMatch = false;
                 }
             }
 
