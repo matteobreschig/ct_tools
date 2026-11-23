@@ -160,14 +160,14 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
             // Senza un prezzo proprio pubblico al trend Cardmarket o,
             // in mancanza, al minimo del marketplace Cardtrader.
             // Senza nessuna fonte l'inserzione non è pubblicabile.
-            if ($sell && $product->price <= 0) {
+            if ($sell) {
                 $resolved = $this->resolveSalePrice($client, $product);
 
-                if ($resolved === null) {
+                if ($resolved !== null) {
+                    $product->price = $resolved;
+                } elseif ($product->price <= 0) {
                     continue;
                 }
-
-                $product->price = $resolved;
             }
 
             $product->sale = $sell;
@@ -265,19 +265,20 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Prezzo a cui pubblicare il prodotto: il suo, altrimenti il trend
-     * Cardmarket, altrimenti il minimo del marketplace Cardtrader per la
+     * Prezzo a cui pubblicare il prodotto: il trend Cardmarket (così tutte le
+     * copie della stessa versione hanno lo stesso prezzo), altrimenti il suo,
+     * altrimenti il minimo del marketplace Cardtrader per la
      * stessa carta in pari condizione, lingua e reverse (copre le stampe
      * senza prezzi Cardmarket, come i Prize Pack). Null = nessuna fonte.
      */
     protected function resolveSalePrice(CTApiClient $client, Product $product): ?float
     {
-        if ($product->price > 0) {
-            return $product->price;
-        }
-
         if ($product->cardmarket_price_trend > 0) {
             return $product->cardmarket_price_trend;
+        }
+
+        if ($product->price > 0) {
+            return $product->price;
         }
 
         $cacheKey = implode(':', [
