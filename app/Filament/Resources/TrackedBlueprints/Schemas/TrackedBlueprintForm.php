@@ -6,8 +6,6 @@ use App\Enums\ConditionType;
 use App\Enums\Language;
 use App\Models\Expansion;
 use App\Services\CTApiClient;
-use DOMDocument;
-use DOMXPath;
 use Exception;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Hidden;
@@ -18,7 +16,6 @@ use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\RawJs;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use TCGdex\TCGdex;
 
 class TrackedBlueprintForm
@@ -40,55 +37,57 @@ class TrackedBlueprintForm
                 ->live()
                 ->afterStateUpdated(function ($state, Set $set) {
                     try {
-                        $html = file_get_contents($state);
-                        $dom = new DomDocument();
-                        @$dom->loadHTML($html);
-                        $xp = new domxpath($dom);
-                        $jsonScripts = $xp->query('//script[@type="application/ld+json"]');
-                        $json = trim($jsonScripts->item(0)->nodeValue);
-                        $data = json_decode($json, true);
-                        $set('blueprint_id', $data['sku']);
-                        $set('blueprint_name', $data['name']);
-                        $set('price', $data['offers']['price']);
+                        // La pagina cardtrader.com è dietro Cloudflare: l'id sta nell'URL, il resto lo dà l'API.
+                        if (! preg_match('#/cards/(\d+)#', (string) $state, $matches)) {
+                            throw new Exception('URL senza id blueprint');
+                        }
+                        $blueprintId = (int) $matches[1];
 
-                        //Chiamata API per gli altri dati
-                        $tcgdexEn = new TCGdex("en");
-                        $tcgdexIt = new TCGdex("it");
+                        $tcgdexEn = new TCGdex('en');
+                        $tcgdexIt = new TCGdex('it');
                         $client = new CTApiClient(Auth::user());
                         $expansions = Expansion::pluck('id', 'ct_id');
                         $expansionsTcgdex = Expansion::pluck('tcgdex_code', 'ct_id');
 
-                        $responseData = $client->get('/marketplace/products', ['blueprint_id' => $data['sku'], 'language' => config('app.locale')])->json();
-                        if($responseData) {
+                        $listings = $client->get('/marketplace/products', ['blueprint_id' => $blueprintId, 'language' => config('app.locale')])->json()[$blueprintId] ?? [];
+                        $responseData = [$blueprintId => $listings];
+
+                        $set('blueprint_id', $blueprintId);
+                        $set('blueprint_name', $listings[0]['name_en'] ?? null);
+                        $minimumCents = collect($listings)->min(fn (array $listing) => $listing['price']['cents'] ?? null);
+                        if ($minimumCents !== null) {
+                            $set('price', $minimumCents / 100);
+                        }
+
+                        if ($listings) {
                             $collectorNumber = 0;
-                            if($responseData[$data['sku']][0]['properties_hash']['collector_number']) {
-                                $collectorNumber = (int) explode('/', $responseData[$data['sku']][0]['properties_hash']['collector_number'])[0];
+                            if ($responseData[$blueprintId][0]['properties_hash']['collector_number']) {
+                                $collectorNumber = (int) explode('/', $responseData[$blueprintId][0]['properties_hash']['collector_number'])[0];
                             }
 
                             $tcgdexProduct = null;
-                            if($expansionsTcgdex[$responseData[$data['sku']][0]['expansion']['id']]) {
-                                if(!$tcgdexProduct = $tcgdexIt->card->get($expansionsTcgdex[$responseData[$data['sku']][0]['expansion']['id']] . '-' . $collectorNumber)) {
-                                    if(!$tcgdexProduct = $tcgdexIt->card->get($expansionsTcgdex[$responseData[$data['sku']][0]['expansion']['id']] . '-' . str_pad($collectorNumber, 3, '0', STR_PAD_LEFT))) {
-                                        if(!$tcgdexProduct = $tcgdexEn->card->get($expansionsTcgdex[$responseData[$data['sku']][0]['expansion']['id']] . '-' . $collectorNumber)) {
-                                            $tcgdexProduct = $tcgdexEn->card->get($expansionsTcgdex[$responseData[$data['sku']][0]['expansion']['id']] . '-' . str_pad($collectorNumber, 3, '0', STR_PAD_LEFT));
+                            if ($expansionsTcgdex[$responseData[$blueprintId][0]['expansion']['id']]) {
+                                if (! $tcgdexProduct = $tcgdexIt->card->get($expansionsTcgdex[$responseData[$blueprintId][0]['expansion']['id']].'-'.$collectorNumber)) {
+                                    if (! $tcgdexProduct = $tcgdexIt->card->get($expansionsTcgdex[$responseData[$blueprintId][0]['expansion']['id']].'-'.str_pad($collectorNumber, 3, '0', STR_PAD_LEFT))) {
+                                        if (! $tcgdexProduct = $tcgdexEn->card->get($expansionsTcgdex[$responseData[$blueprintId][0]['expansion']['id']].'-'.$collectorNumber)) {
+                                            $tcgdexProduct = $tcgdexEn->card->get($expansionsTcgdex[$responseData[$blueprintId][0]['expansion']['id']].'-'.str_pad($collectorNumber, 3, '0', STR_PAD_LEFT));
                                         }
                                     }
                                 }
                             }
 
-                            $set('blueprint_expansion_id', $expansions[$responseData[$data['sku']][0]['expansion']['id']]);
+                            $set('blueprint_expansion_id', $expansions[$responseData[$blueprintId][0]['expansion']['id']]);
                             $set('blueprint_collector_number', $collectorNumber);
                             $set('blueprint_image_url', $tcgdexProduct?->image);
                             $set('cardmarket_product_id', $tcgdexProduct?->pricing?->cardmarket?->idProduct);
-                            $set('cardmarket_price_avg', $responseData[$data['sku']][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg);
-                            $set('cardmarket_price_low', $responseData[$data['sku']][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'low-holo'} : $tcgdexProduct?->pricing?->cardmarket?->low);
-                            $set('cardmarket_price_trend', $responseData[$data['sku']][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'trend-holo'} : $tcgdexProduct?->pricing?->cardmarket?->trend);
-                            $set('cardmarket_price_avg1', $responseData[$data['sku']][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg1-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg1);
-                            $set('cardmarket_price_avg7', $responseData[$data['sku']][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg7-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg7);
-                            $set('cardmarket_price_avg30', $responseData[$data['sku']][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg30-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg30);
+                            $set('cardmarket_price_avg', $responseData[$blueprintId][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg);
+                            $set('cardmarket_price_low', $responseData[$blueprintId][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'low-holo'} : $tcgdexProduct?->pricing?->cardmarket?->low);
+                            $set('cardmarket_price_trend', $responseData[$blueprintId][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'trend-holo'} : $tcgdexProduct?->pricing?->cardmarket?->trend);
+                            $set('cardmarket_price_avg1', $responseData[$blueprintId][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg1-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg1);
+                            $set('cardmarket_price_avg7', $responseData[$blueprintId][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg7-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg7);
+                            $set('cardmarket_price_avg30', $responseData[$blueprintId][0]['properties_hash']['pokemon_reverse'] ? $tcgdexProduct?->pricing?->cardmarket?->{'avg30-holo'} : $tcgdexProduct?->pricing?->cardmarket?->avg30);
                         }
-                    }
-                    catch(Exception $e) {
+                    } catch (Exception $e) {
                         $set('blueprint_url', null);
                     }
                 })
