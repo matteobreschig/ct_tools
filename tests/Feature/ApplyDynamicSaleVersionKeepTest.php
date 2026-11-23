@@ -48,7 +48,8 @@ function versionProduct(User $user, int $blueprintId, int $quantity, float $pric
 
 beforeEach(function () {
     Http::preventStrayRequests();
-    Http::fake(['api.cardtrader.com/*' => Http::response(['resource' => ['id' => 777, 'quantity' => 1]])]);
+    $this->createdListing = ['id' => 777, 'quantity' => 1];
+    Http::fake(['api.cardtrader.com/*' => fn () => Http::response(['resource' => $this->createdListing])]);
     $this->user = User::factory()->create(['ct_api_key' => 'test-key']);
     $this->job = versionKeepJob($this->user);
 });
@@ -146,4 +147,34 @@ it('ignores locked rows', function () {
 
     expect($locked->refresh()->sale)->toBeTrue()
         ->and($free->refresh()->sale)->toBeFalse();
+});
+
+it('hands the split excess to the group minimum', function () {
+    $this->createdListing = ['id' => 777, 'quantity' => 2];
+    $row = versionProduct($this->user, 100, 3, 1.5, ['product_id' => 9001]);
+
+    $this->job->run(new EloquentCollection([$row]), 2, [VersionKeepSetting::keyFor($row) => 1]);
+
+    $excess = Product::where('product_id', 777)->firstOrFail();
+
+    expect($row->refresh()->sale)->toBeFalse()
+        ->and($excess->quantity)->toBe(2)
+        ->and($excess->sale)->toBeFalse();
+});
+
+it('uses the merged quantity when CardTrader folds the excess into a listing in the group', function () {
+    $this->createdListing = ['id' => 777, 'quantity' => 5];
+    $row = versionProduct($this->user, 100, 3, 1.5, ['product_id' => 9001]);
+    $merged = versionProduct($this->user, 100, 3, 2.0, ['product_id' => 777]);
+
+    $this->job->run(new EloquentCollection([$row, $merged]), 1, [VersionKeepSetting::keyFor($row) => 1]);
+
+    $created = collect(Http::recorded())
+        ->map(fn (array $pair): Request => $pair[0])
+        ->filter(fn (Request $request): bool => $request->method() === 'POST' && isset($request['blueprint_id']))
+        ->map(fn (Request $request): int => $request['quantity'])
+        ->values()
+        ->all();
+
+    expect($created)->toBe([2, 4]);
 });

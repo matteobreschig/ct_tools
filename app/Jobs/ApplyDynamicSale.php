@@ -197,6 +197,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
     {
         $keptByVersion = [];
         $usedIds = [];
+        $spawned = [];
 
         foreach ($products as $product) {
             // Righe bloccate a mano: né conteggiate né toccate.
@@ -221,8 +222,12 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
 
             if ($excess > 0 && $salePrice > 0) {
                 try {
-                    $this->splitListing($client, $product, $excess, $salePrice);
+                    $created = $this->splitListing($client, $product, $excess, $salePrice);
                     $kept = $keep;
+
+                    if ($created !== null) {
+                        $spawned[] = $created;
+                    }
                 } catch (RequestException|ApiRateLimitException) {
                     // Riga intera ferma, niente di pubblicato a metà.
                 }
@@ -241,7 +246,22 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
             ];
         }
 
-        return $products->reject(fn (Product $product): bool => in_array($product->id, $usedIds, true))->values();
+        $remaining = $products->reject(fn (Product $product): bool => in_array($product->id, $usedIds, true))->values();
+
+        // L'eccedenza delle divisioni passa alla regola di gruppo. Se Cardtrader
+        // l'ha fusa con una riga già nel gruppo, vale la riga aggiornata: quella
+        // in memoria ha la quantità vecchia e farebbe sparire le copie fuse.
+        foreach ($spawned as $created) {
+            $index = $remaining->search(fn (Product $product): bool => $product->id === $created->id);
+
+            if ($index === false) {
+                $remaining->push($created);
+            } else {
+                $remaining->put($index, $created);
+            }
+        }
+
+        return $remaining;
     }
 
     /**
@@ -332,8 +352,9 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
      * Divide un'inserzione di confine: riduce quella esistente alle copie da
      * tenere (al prezzo di disattivazione, anche per evitare che Cardtrader
      * fonda le due inserzioni) e pubblica l'eccedenza come nuova inserzione.
+     * Restituisce la riga dell'inserzione dell'eccedenza (nuova o fusa), se nota.
      */
-    protected function splitListing(CTApiClient $client, Product $product, int $excess, float $salePrice): void
+    protected function splitListing(CTApiClient $client, Product $product, int $excess, float $salePrice): ?Product
     {
         // Prima la riduzione, così nessuna copia è offerta due volte; se la
         // creazione poi fallisce le copie tornano sull'inserzione ferma.
@@ -371,7 +392,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
         // vendita: allineo la riga locale all'inserzione restituita, esistente o nuova.
         $resource = $created['resource'] ?? null;
         if ($resource) {
-            Product::updateOrCreate(
+            return Product::updateOrCreate(
                 [
                     'product_id' => $resource['id'],
                     'user_id' => $product->user_id,
@@ -391,5 +412,7 @@ class ApplyDynamicSale implements ShouldBeUnique, ShouldQueue
                 ]),
             );
         }
+
+        return null;
     }
 }
